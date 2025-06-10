@@ -165,7 +165,9 @@ def load_model(model_type, input_dim, seq_len, pred_len):
 
         # Creating the model
         model = Transformer(input_dim, d_model, d_output, q, v, h, N, attention_size=attention_size, dropout=dropout, chunk_mode=chunk_mode, pe=pe)
+        
     elif model_type == 'GPT2like_transformer':
+
         model = GPT2TimeSeries(input_dim, seq_len, pred_len)
     elif model_type == 'cnn':
         model = CNNTimeSeriesModel(input_dim, seq_len, pred_len)
@@ -182,4 +184,5 @@ def load_model(model_type, input_dim, seq_len, pred_len):
     # Define loss function and optimizer
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Adjust learning rate as needed
-    return model, criterion, optimizer
+    chkpnt_path = f"training_results/{model_type}_best.pth"
+    return model, criterion, optimizer, chkpnt_path
