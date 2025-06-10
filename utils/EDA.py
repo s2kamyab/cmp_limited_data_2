@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
+import pandas as pd
+import numpy as np
 def plot_train_test_target_distributions(train_loader, test_loader, num_outputs=3):
     # Step 1: Extract targets from DataLoaders
     def extract_targets(loader):
@@ -24,7 +26,33 @@ def plot_train_test_target_distributions(train_loader, test_loader, num_outputs=
         plt.grid(True)
         plt.tight_layout()
         plt.show()
-def Explore_data(eda, train_loader, test_loader, preprocess_type):
+
+
+def compute_feature_correlation(dataloader, features):
+    all_data = []
+
+    # Step 1: Accumulate all features from the DataLoader
+    for batch in dataloader:
+        if isinstance(batch, (tuple, list)):
+            batch = batch[0]  # ignore labels if present
+        # batch shape: (batch_size, seq_len, features)
+        all_data.append(batch)
+
+    # Step 2: Concatenate all batches
+    data_tensor = np.array(all_data)#torch.cat(all_data, dim=0)  # shape: (total_batches * batch_size, seq_len, features)
+
+    # Step 3: Flatten across time and batch
+    B, T, F = data_tensor.shape
+    flat_data = data_tensor.reshape(-1, F)#.cpu().numpy()  # shape: (B * T, features)
+
+    # Step 4: Compute correlation matrix using pandas
+    df = pd.DataFrame(flat_data[:,:len(features)], columns=features)
+    corr_matrix = df.corr()
+
+    return corr_matrix
+
+
+def Explore_data(eda, train_loader, test_loader, preprocess_type, features):
     if preprocess_type == 'decompose':
         num_outputs = 3
     else:
@@ -39,7 +67,7 @@ def Explore_data(eda, train_loader, test_loader, preprocess_type):
         print("Calculating and plotting correlation matrix...")
         # Assuming train_loader contains the training data
         train_data = next(iter(train_loader))[0].cpu().numpy()  # Get a batch of data
-        corr_matrix = torch.corrcoef(torch.tensor(train_data).T).numpy()
+        corr_matrix = compute_feature_correlation(train_data, features)
         plt.figure(figsize=(10, 8))
         sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap='coolwarm', square=True)
         plt.title("Correlation Matrix")

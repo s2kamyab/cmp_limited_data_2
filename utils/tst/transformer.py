@@ -1,6 +1,8 @@
+#! C:\Users\shima\Documents\Postdoc_Uvic\Paper1\Code\Github\uvic_paper\Scripts\python.exe
 import torch
 import torch.nn as nn
-
+import sys
+sys.path.append(r'C:\\Users\\shima\\Documents\\Postdoc_Uvic\\Paper1\\Code\\Github\\paper_1_git_repo\\utils')
 from tst.encoder import Encoder
 from tst.decoder import Decoder
 from tst.utils import generate_original_PE, generate_regular_PE
