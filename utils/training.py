@@ -1,4 +1,36 @@
 import torch
+
+class EarlyStopping:
+    def __init__(self, patience=5, min_delta=0, path='checkpoint.pt'):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.path = path
+
+    def __call__(self, val_loss, model):
+        score = -val_loss  # we want to minimize val_loss
+
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(model)
+        elif score < self.best_score + self.min_delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                print(f"[EarlyStopping] Triggered after {self.patience} epochs.")
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_checkpoint(model)
+            self.counter = 0
+
+    def save_checkpoint(self, model):
+        torch.save(model.state_dict(), self.path)
+
+
+
+
 def save_checkpoint(model, optimizer, epoch, loss, path='checkpoint.pth'):
     torch.save({
         'epoch': epoch,
@@ -25,6 +57,7 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, chkpnt_p
     best_val_loss = float('inf')
     train_losses = []
     val_losses = []
+    early_stopping = EarlyStopping(patience=3, path=chkpnt_path)
     for epoch in range(epochs):
         model.train()
         total_loss = 0
@@ -51,6 +84,9 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, chkpnt_p
         
         val_losses.append(val_loss / len(test_loader))
         print(f"Epoch {epoch+1}/{epochs} | Train Loss: {total_loss/len(train_loader):.4f} | Test Loss: {val_loss/len(test_loader):.4f}")
+        early_stopping(val_loss, model)
+        if early_stopping.early_stop:
+            break
     return train_losses, val_losses, model
     # Plot sample predictions
     # load checkpoint

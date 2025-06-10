@@ -16,7 +16,7 @@ def main():
     pred_len = 4
     seq_len = 16
     batch_size = 16
-    preprocess_type ='decompose'# 'None'#'decompose'
+    preprocess_type ='None'#'decompose'# 'None'#'decompose'
     eda = False
     model_type = 'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
     eda = True
@@ -25,7 +25,7 @@ def main():
     train_loader, test_loader, train_loader_actual, test_loader_actual, input_dim, cols= load_data(dataset_name, preprocess_type, seq_len, pred_len,batch_size, normalization)
     #####################################################################################
     # Explore data
-    Explore_data(eda, train_loader, test_loader, preprocess_type, cols)
+    Explore_data(eda, train_loader, test_loader, preprocess_type, cols, dataset_name)
     ##########3##############################################################################
     # Load model
     model, criterion, optimizer, chkpnt_path = load_model(model_type, input_dim, seq_len, pred_len)
