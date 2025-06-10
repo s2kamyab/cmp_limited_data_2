@@ -165,5 +165,21 @@ def load_model(model_type, input_dim, seq_len, pred_len):
 
         # Creating the model
         model = Transformer(input_dim, d_model, d_output, q, v, h, N, attention_size=attention_size, dropout=dropout, chunk_mode=chunk_mode, pe=pe)
-
-
+    elif model_type == 'GPT2like_transformer':
+        model = GPT2TimeSeries(input_dim, seq_len, pred_len)
+    elif model_type == 'cnn':
+        model = CNNTimeSeriesModel(input_dim, seq_len, pred_len)
+    elif model_type == 'gru':
+        model = GRUTimeSeriesModel(pred_len)
+    elif model_type == 'lstm':
+        model = LSTMTimeSeriesModel(pred_len)
+    elif model_type == 'rnn':
+        model = SimpleRNNTimeSeriesModel(pred_len)
+    elif model_type == 'times_net':
+        model = TimesNet(input_features=input_dim, sequence_length=seq_len, output_length=pred_len)
+    else:
+        raise ValueError(f"Model type '{model_type}' is not recognized.")
+    # Define loss function and optimizer
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Adjust learning rate as needed
+    return model, criterion, optimizer
