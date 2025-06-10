@@ -2,7 +2,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-
+from utils.tst import Transformer
 class GPT2TimeSeries(nn.Module):
     def __init__(self, input_dim, seq_len, pred_len, d_model=64, nhead=4, num_layers=4):
         super(GPT2TimeSeries, self).__init__()
@@ -67,6 +67,7 @@ class CNNTimeSeriesModel(nn.Module):
         x = self.flatten(x)
         x = self.dense(x)
         return x[:, -self.pred_len:, :]
+    
 class GRUTimeSeriesModel(nn.Module):
     def __init__(self, pred_len):
         super(GRUTimeSeriesModel, self).__init__()
@@ -86,6 +87,83 @@ class GRUTimeSeriesModel(nn.Module):
         x = self.dropout(x)
         x = self.dense(x)  # Output shape: (batch, seq_len, 1)
         return x[:, -self.pred_len:, :]  # Keep last 3 time steps, shape: (batch, 3, 1)
+    
+class LSTMTimeSeriesModel(nn.Module):
+    def __init__(self, pred_len):
+        super(LSTMTimeSeriesModel, self).__init__()
+        self.lstm1 = nn.LSTM(input_size=2, hidden_size=100, batch_first=True)
+        self.dropout1 = nn.Dropout(p=0.2)
+        self.lstm2 = nn.LSTM(input_size=100, hidden_size=100, batch_first=True)
+        self.lstm3 = nn.LSTM(input_size=100, hidden_size=100, batch_first=True)
+        self.lstm4 = nn.LSTM(input_size=100, hidden_size=100, batch_first=True)
+        self.dropout2 = nn.Dropout(p=0.2)
+        self.dense = nn.Linear(100, 1)
+        self.pred_len = pred_len
 
+    def forward(self, x):
+        x, _ = self.lstm1(x)
+        x = self.dropout1(x)
+        x, _ = self.lstm2(x)
+        x, _ = self.lstm3(x)
+        x, _ = self.lstm4(x)
+        x = self.dropout2(x)
+        x = self.dense(x)  # Output shape: (batch, seq_len, 1)
+        return x[:, -self.pred_len:, :]  # Keep last 3 time steps, shape: (batch, 3, 1)
+
+class SimpleRNNTimeSeriesModel(nn.Module):
+    def __init__(self, pred_len):
+        super(SimpleRNNTimeSeriesModel, self).__init__()
+        self.rnn1 = nn.RNN(input_size=2, hidden_size=100, batch_first=True)
+        self.dropout1 = nn.Dropout(p=0.2)
+        self.rnn2 = nn.RNN(input_size=100, hidden_size=100, batch_first=True)
+        self.rnn3 = nn.RNN(input_size=100, hidden_size=100, batch_first=True)
+        self.dropout2 = nn.Dropout(p=0.2)
+        self.dense = nn.Linear(100, 1)
+        self.pred_len = pred_len
+
+    def forward(self, x):
+        x, _ = self.rnn1(x)
+        x = self.dropout1(x)
+        x, _ = self.rnn2(x)
+        x, _ = self.rnn3(x)
+        x = self.dropout2(x)
+        x = self.dense(x)  # Output shape: (batch, seq_len, 1)
+        return x[:, -self.pred_len:, :]  # Keep last 3 time steps, shape: (batch, 3, 1)
+    
+
+#Building the TimesNet Model with corrected architecture
+class TimesNet(nn.Module):
+    def __init__(self, input_features, sequence_length, output_length, num_layers=4):
+        super(TimesNet, self).__init__()
+        self.conv_layers = nn.ModuleList()
+        for i in range(num_layers):
+            in_channels = input_features if i == 0 else 64
+            self.conv_layers.append(nn.Conv1d(in_channels=in_channels, out_channels=64, kernel_size=3, padding=1))
+        self.flatten = nn.Flatten()
+        self.dense = nn.Linear(64 * sequence_length, output_length)
+
+    def forward(self, x):
+        for conv in self.conv_layers:
+            x = torch.relu(conv(x))
+        x = self.flatten(x)
+        x = self.dense(x)
+        return x
+
+def load_model(model_type, input_dim, seq_len, pred_len):
+    if model_type == 'finspd_transformer':
+        chunk_mode = None
+        output_length = pred_len#3
+        d_output = output_length * input_dim# prediction length be 6, this is confirmed
+        d_model = 32 # Lattent dim
+        q = 8 # Query size
+        v = 8 # Value size
+        h = 8 # Number of heads
+        N = 4 # Number of encoder and decoder to stack
+        attention_size = 50 # Attention window size 这个和形状没有关系
+        dropout = 0.1 # Dropout rate
+        pe = 'regular' # Positional encoding
+
+        # Creating the model
+        model = Transformer(input_dim, d_model, d_output, q, v, h, N, attention_size=attention_size, dropout=dropout, chunk_mode=chunk_mode, pe=pe)
 
 

@@ -2,6 +2,28 @@ import pandas as pd
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from scipy.stats import gaussian_kde
+from statsmodels.tsa.seasonal import seasonal_decompose
+from utils.EDA import plot_train_test_target_distributions
+def decompose_series(series, model='additive', freq=None):
+    """
+    Decomposes a time series into trend, seasonal, and residual components.
+    
+    Args:
+        series: Pandas Series with datetime index.
+        model: 'additive' or 'multiplicative'
+        freq: seasonal period (e.g., 52 for weekly with yearly seasonality)
+    
+    Returns:
+        A dict with trend, seasonal, and residual components.
+    """
+    result = seasonal_decompose(series, model=model, period=freq, extrapolate_trend='freq')
+    return {
+        'observed': result.observed,
+        'trend': result.trend,
+        'seasonal': result.seasonal,
+        'resid': result.resid
+    }
 def create_seqs_normalized(dfs, common_cols, seq_len, pred_len, normalization, target_index):
     datasets = []
     datasets_actual = []
@@ -70,7 +92,7 @@ def preprocess(preprocess_type, train1, test1, target_index):
         target_index = [target_index]
     return train1, test1, target_index
 
-def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalization):
+def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalization, eda):
     if dataset == 'soshianest_5627':
         df = pd.read_csv(r'data\\5627_dataset.csv')
         target_index = df.index('OT')
@@ -139,7 +161,9 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
     train_loader_actual = DataLoader(train_dataset_actual, batch_size=batch_size, shuffle=True)
     test_loader_actual = DataLoader(test_dataset_actual, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
-
+    if eda:
+        plot_train_test_target_distributions(train_loader, test_loader, num_outputs=len(target_index))
+    return train_loader, test_loader, train_loader_actual, test_loader_actual, input_dim
 # # Test csvs = 50
 #     names_50 = ['aal.csv', 'AAPL.csv', 'ABBV.csv', 'AMD.csv', 'amgn.csv', 'AMZN.csv', 'BABA.csv',
 #                 'bhp.csv', 'bidu.csv', 'biib.csv', 'BRK-B.csv', 'C.csv', 'cat.csv', 'cmcsa.csv', 'cmg.csv',
