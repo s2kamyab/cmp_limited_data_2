@@ -13,9 +13,9 @@ def plot_train_test_target_distributions(train_loader, test_loader,data_name, nu
 
     train_targets = extract_targets(train_loader)
     test_targets = extract_targets(test_loader)
-    if train_targets.ndim == 2:
+    if train_targets.shape[1] == 3:
         comps = ['trend', 'seasonal', 'residual']
-    else:
+    elif train_targets.shape[1] == 1:
         comps = ['target']
 
     # Step 2: Plot for each output dimension

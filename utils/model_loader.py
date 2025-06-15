@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from utils.tst import Transformer
 class GPT2TimeSeries(nn.Module):
-    def __init__(self, input_dim, seq_len, pred_len, d_model=64, nhead=4, num_layers=4):
+    def __init__(self, input_dim, output_dim, seq_len, pred_len, d_model=64, nhead=4, num_layers=4):
         super(GPT2TimeSeries, self).__init__()
         self.input_dim = input_dim
         self.seq_len = seq_len
@@ -18,7 +18,7 @@ class GPT2TimeSeries(nn.Module):
         decoder_layer = nn.TransformerDecoderLayer(d_model=d_model, nhead=nhead)
         self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
 
-        self.output_layer = nn.Linear(d_model, 3)  # predict trend , seasonal, residual
+        self.output_layer = nn.Linear(d_model, output_dim)  # predict trend , seasonal, residual
 
     def forward(self, x):
         # x: [batch, seq_len, input_dim]
@@ -43,12 +43,13 @@ class GPT2TimeSeries(nn.Module):
     
 
 class CNNTimeSeriesModel(nn.Module):
-    def __init__(self, input_channels, seq_len, pred_len):
+    def __init__(self, input_channels, output_dim, seq_len, pred_len):
         super(CNNTimeSeriesModel, self).__init__()
         layers = []
         self.pred_len = pred_len
+        self.output_dim = output_dim
         self.conv_layers = nn.Sequential(
-            nn.Conv1d(in_channels=2, out_channels=64, kernel_size=3),  # (batch, 2, 49) -> (batch, 64, 47)
+            nn.Conv1d(in_channels=input_channels, out_channels=64, kernel_size=3),  # (batch, 2, 49) -> (batch, 64, 47)
             nn.ReLU(),
             nn.Conv1d(in_channels=64, out_channels=32, kernel_size=3),  # -> (batch, 32, 45)
             nn.ReLU(),
@@ -59,24 +60,31 @@ class CNNTimeSeriesModel(nn.Module):
             nn.Dropout(p=0.2)
         )
         self.flatten = nn.Flatten()
-        self.dense = nn.Linear(in_features=32 * 41, out_features=1)
+        self.dense = None#nn.Linear( out_features=output_dim)
 
     def forward(self, x):
         x = x.permute(0, 2, 1)  # Convert to (batch, channels, seq_len)
         x = self.conv_layers(x)
+        # x = x.permute(0, 2, 1)
         x = self.flatten(x)
-        x = self.dense(x)
-        return x[:, -self.pred_len:, :]
+        in_features = x.shape[-1]
+        # if self.dense is None:
+        in_features = x.shape[-1]
+        self.dense = nn.Linear(in_features=in_features, out_features=self.pred_len*self.output_dim).to(x.device)
+
+        x = self.dense(x)   
+        x = x.view(-1, self.pred_len, self.output_dim)  # (batch, pred_len, output_dim)
+        return x
     
 class GRUTimeSeriesModel(nn.Module):
-    def __init__(self, pred_len):
+    def __init__(self, pred_len, output_dim=1):
         super(GRUTimeSeriesModel, self).__init__()
         self.gru1 = nn.GRU(input_size=2, hidden_size=100, batch_first=True, dropout=0.0, bidirectional=False)
         self.gru2 = nn.GRU(input_size=100, hidden_size=100, batch_first=True, dropout=0.0, bidirectional=False)
         self.gru3 = nn.GRU(input_size=100, hidden_size=100, batch_first=True, dropout=0.0, bidirectional=False)
         self.gru4 = nn.GRU(input_size=100, hidden_size=100, batch_first=True, dropout=0.0, bidirectional=False)
         self.dropout = nn.Dropout(p=0.2)
-        self.dense = nn.Linear(100, 1)
+        self.dense = nn.Linear(100, output_dim)
         self.pred_len = pred_len
 
     def forward(self, x):
@@ -89,7 +97,7 @@ class GRUTimeSeriesModel(nn.Module):
         return x[:, -self.pred_len:, :]  # Keep last 3 time steps, shape: (batch, 3, 1)
     
 class LSTMTimeSeriesModel(nn.Module):
-    def __init__(self, pred_len):
+    def __init__(self, pred_len, output_dim=1):
         super(LSTMTimeSeriesModel, self).__init__()
         self.lstm1 = nn.LSTM(input_size=2, hidden_size=100, batch_first=True)
         self.dropout1 = nn.Dropout(p=0.2)
@@ -97,7 +105,7 @@ class LSTMTimeSeriesModel(nn.Module):
         self.lstm3 = nn.LSTM(input_size=100, hidden_size=100, batch_first=True)
         self.lstm4 = nn.LSTM(input_size=100, hidden_size=100, batch_first=True)
         self.dropout2 = nn.Dropout(p=0.2)
-        self.dense = nn.Linear(100, 1)
+        self.dense = nn.Linear(100, output_dim)
         self.pred_len = pred_len
 
     def forward(self, x):
@@ -111,14 +119,14 @@ class LSTMTimeSeriesModel(nn.Module):
         return x[:, -self.pred_len:, :]  # Keep last 3 time steps, shape: (batch, 3, 1)
 
 class SimpleRNNTimeSeriesModel(nn.Module):
-    def __init__(self, pred_len):
+    def __init__(self, pred_len, output_dim):
         super(SimpleRNNTimeSeriesModel, self).__init__()
         self.rnn1 = nn.RNN(input_size=2, hidden_size=100, batch_first=True)
         self.dropout1 = nn.Dropout(p=0.2)
         self.rnn2 = nn.RNN(input_size=100, hidden_size=100, batch_first=True)
         self.rnn3 = nn.RNN(input_size=100, hidden_size=100, batch_first=True)
         self.dropout2 = nn.Dropout(p=0.2)
-        self.dense = nn.Linear(100, 1)
+        self.dense = nn.Linear(100, output_dim)
         self.pred_len = pred_len
 
     def forward(self, x):
@@ -149,7 +157,7 @@ class TimesNet(nn.Module):
         x = self.dense(x)
         return x
 
-def load_model(model_type, input_dim, seq_len, pred_len):
+def load_model(model_type, input_dim, output_dim, seq_len, pred_len, lr=0.0001):
     if model_type == 'finspd_transformer':
         chunk_mode = None
         output_length = pred_len#3
@@ -168,21 +176,21 @@ def load_model(model_type, input_dim, seq_len, pred_len):
         
     elif model_type == 'GPT2like_transformer':
 
-        model = GPT2TimeSeries(input_dim, seq_len, pred_len)
+        model = GPT2TimeSeries(input_dim,output_dim, seq_len, pred_len)
     elif model_type == 'cnn':
-        model = CNNTimeSeriesModel(input_dim, seq_len, pred_len)
+        model = CNNTimeSeriesModel(input_dim,output_dim, seq_len, pred_len)
     elif model_type == 'gru':
-        model = GRUTimeSeriesModel(pred_len)
+        model = GRUTimeSeriesModel(pred_len,output_dim)
     elif model_type == 'lstm':
-        model = LSTMTimeSeriesModel(pred_len)
+        model = LSTMTimeSeriesModel(pred_len,output_dim)
     elif model_type == 'rnn':
-        model = SimpleRNNTimeSeriesModel(pred_len)
+        model = SimpleRNNTimeSeriesModel(pred_len,output_dim)
     elif model_type == 'times_net':
         model = TimesNet(input_features=input_dim, sequence_length=seq_len, output_length=pred_len)
     else:
         raise ValueError(f"Model type '{model_type}' is not recognized.")
     # Define loss function and optimizer
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Adjust learning rate as needed
-    chkpnt_path = f"training_results/{model_type}_best.pth"
-    return model, criterion, optimizer, chkpnt_path
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)  # Adjust learning rate as needed
+    
+    return model, criterion, optimizer

@@ -26,6 +26,28 @@ def decompose_series(series, model='additive', freq=None):
         'seasonal': result.seasonal,
         'resid': result.resid
     }
+
+
+def normalise_selected_columns(window_data, columns_to_normalise, single_window=False):
+        # normalised_data = []
+        # window_data = [window_data] if single_window else window_data
+        # for window in window_data:
+        # normalised_window = []
+        # for ts_i in range(window_data.shape[0]):
+            # if col_i in columns_to_normalise:
+                # Normalize only if the column index is in the list of columns to normalize
+        w = window_data[-2]
+        w[w==0] = 1
+        normalised_window = window_data/w-1#[((p / w) - 1) for p in window_data]
+            # else:
+                # Keep the original data for columns not in the list
+                # normalised_col = window[col_i].tolist()
+        # normalised_window.append(normalised_col)
+        # normalised_window = np.array(normalised_window).T
+        # normalised_data.append(normalised_window)
+        return np.array(normalised_window)
+
+
 def create_seqs_normalized(dfs, common_cols, seq_len, pred_len, normalization, target_index):
     datasets = []
     datasets_actual = []
@@ -59,6 +81,10 @@ def create_seqs_normalized(dfs, common_cols, seq_len, pred_len, normalization, t
                 x_seq_normalized = np.nan_to_num(x_seq_normalized, nan=0)
                 y_seq_normalized = (y_seq - np.tile(mins[0, target_index], [y_seq.shape[0], 1])) / np.tile(maxs[0, target_index]-mins[0, target_index], [y_seq.shape[0], 1]) #if (maxs[0, target_index]-mins[0, target_index]) != 0 else 1)
                 y_seq_normalized = np.nan_to_num(y_seq_normalized, nan=0)
+            elif normalization == 'relative':
+                t = normalise_selected_columns(values[i:i+seq_len+pred_len], range(len(common_cols)), single_window=False)
+                x_seq_normalized = t[:seq_len, :]
+                y_seq_normalized = t[seq_len:, target_index]
             elif normalization == 'None':
                 x_seq_normalized = x_seq
                 y_seq_normalized = y_seq
@@ -132,21 +158,29 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
     if dataset == 'soshianest_5627':
         df = pd.read_csv(r'data\\5627_dataset.csv')
         target_index = df.columns.to_list().index('OT')
+        df['time_step'] = range(len(df))
+        df = df.drop('date', axis=1)
         train1, test1 = train_test_split_time_series(df, test_size=0.2)
 
     elif dataset == 'soshianest_530486':
         df = pd.read_csv(r'data\\530486_dataset.csv')
         target_index = df.columns.to_list().index('OT')
+        df['time_step'] = range(len(df))
+        df = df.drop('date', axis=1)
         train1, test1 = train_test_split_time_series(df, test_size=0.2)
 
     elif dataset == 'soshianest_530501':
         df = pd.read_csv(r'data\\530501_dataset.csv')
         target_index = df.columns.to_list().index('OT')
+        df['time_step'] = range(len(df))
+        df = df.drop('date', axis=1)
         train1, test1 = train_test_split_time_series(df, test_size=0.2)
 
     elif dataset == 'soshianest_549324':
         df = pd.read_csv(r'data\\549324_dataset.csv')
         target_index = df.columns.to_list().index('OT')
+        df['time_step'] = range(len(df))
+        df = df.drop('date', axis=1)
         train1, test1 = train_test_split_time_series(df, test_size=0.2)
 
     elif dataset == 'fin_aal':
@@ -205,7 +239,10 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         df = df.drop('Date', axis=1)
         df = pd.read_csv(r'data\\WMT.csv')
         train1, test1 = train_test_split_time_series(df, test_size=0.2)
-
+    if preprocess_type == 'decompose':
+        output_dim = 3  # trend, seasonal, residual
+    else:
+        output_dim = 1
     train1, test1, target_index = preprocess(preprocess_type, train1, test1, target_index)   
     train_dataset, input_dim, train_dataset_actual = create_seqs_normalized([train1],train1.columns, seq_len, pred_len, normalization, target_index)
     test_dataset, input_dim, test_dataset_actual = create_seqs_normalized([test1],test1.columns, seq_len, pred_len, normalization, target_index)
@@ -216,7 +253,7 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
     # if eda:
     #     plot_train_test_target_distributions(train_loader, test_loader, num_outputs=len(target_index))
-    return train_loader, test_loader, train_loader_actual, test_loader_actual, input_dim, df.columns.tolist()
+    return train_loader, test_loader, train_loader_actual, test_loader_actual, input_dim, output_dim, train1.columns.tolist(), target_index
 # # Test csvs = 50
 #     names_50 = ['aal.csv', 'AAPL.csv', 'ABBV.csv', 'AMD.csv', 'amgn.csv', 'AMZN.csv', 'BABA.csv',
 #                 'bhp.csv', 'bidu.csv', 'biib.csv', 'BRK-B.csv', 'C.csv', 'cat.csv', 'cmcsa.csv', 'cmg.csv',

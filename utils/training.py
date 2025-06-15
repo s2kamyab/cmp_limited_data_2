@@ -31,40 +31,43 @@ class EarlyStopping:
 
 
 
-def save_checkpoint(model, optimizer, epoch, loss, path='checkpoint.pth'):
+def save_checkpoint(model, optimizer, epoch, loss,val_loss, path='checkpoint.pth'):
     torch.save({
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'loss': loss,
+        'val_loss': val_loss
     }, path)
 
 
-def load_checkpoint(model, optimizer, path='checkpoint.pth'):
+def load_checkpoint_me(model, optimizer, path='checkpoint.pth'):
     checkpoint = torch.load(path, map_location=torch.device('cpu'))  # or 'cuda'
-    model.load_state_dict(checkpoint['model_state_dict'])
+    model.load_state_dict(checkpoint['model_state_dict'], strict=False)  # Use strict=False to ignore missing keys
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     epoch = checkpoint['epoch']
     loss = checkpoint['loss']
-    return model, optimizer, epoch, loss
+    val_loss = checkpoint['val_loss']
+    # print(f"Loaded checkpoint from {path} at epoch {epoch} with loss {loss:.4f} and validation loss {val_loss:.4f}")
+    return model, optimizer, epoch, loss, val_loss
 
 
 def train_model(model, train_loader, test_loader, criterion, optimizer, chkpnt_path, epochs=100, device='cpu', load_checkpoint=False):
     if load_checkpoint == True:
-        model, optimizer, epoch, loss = load_checkpoint(model, optimizer, path=chkpnt_path)
+        model, optimizer, epoch, loss, val_loss = load_checkpoint_me(model, optimizer, path=chkpnt_path)
         print(f"Loaded checkpoint from {chkpnt_path} at epoch {epoch} with loss {loss:.4f}")
     model.to(device)
     best_val_loss = float('inf')
     train_losses = []
     val_losses = []
-    early_stopping = EarlyStopping(patience=3, path=chkpnt_path)
+    early_stopping = EarlyStopping(patience=7, path=chkpnt_path)
     for epoch in range(epochs):
         model.train()
         total_loss = 0
         for x, y in train_loader:
             x, y = x.to(device), y.to(device)
             # 4. Weighted MSE Loss
-            loss = criterion(torch.squeeze(model(x)), y)#torch.mean(weights * (model_residual(x) - y)**2)
+            loss = criterion(torch.squeeze(model(x)), torch.squeeze(y))#torch.mean(weights * (model_residual(x) - y)**2)
 
             loss.backward()
             optimizer.step()
@@ -76,13 +79,17 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, chkpnt_p
         with torch.no_grad():
             for x, y in test_loader:
                 x, y = x.to(device), y.to(device)    
-                val_loss += criterion(torch.squeeze(model(x)), y).item()
+                val_loss += criterion(torch.squeeze(model(x)), torch.squeeze(y)).item()
                 # Save checkpoint of best model
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    save_checkpoint(model, optimizer, epoch, total_loss/len(train_loader), path=chkpnt_path)
+                # if val_loss < best_val_loss:
+                #     best_val_loss = val_loss
+                #     save_checkpoint(model, optimizer, epoch, train_losses, path=chkpnt_path)
         
         val_losses.append(val_loss / len(test_loader))
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            save_checkpoint(model, optimizer, epoch, train_losses, val_losses, path=chkpnt_path)
+
         print(f"Epoch {epoch+1}/{epochs} | Train Loss: {total_loss/len(train_loader):.4f} | Test Loss: {val_loss/len(test_loader):.4f}")
         early_stopping(val_loss, model)
         if early_stopping.early_stop:
