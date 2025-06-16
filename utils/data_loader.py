@@ -139,15 +139,17 @@ def preprocess(preprocess, train1, test1, target_index):
         target_index = [train1.columns.get_loc('trend'), train1.columns.get_loc('seasonal'), train1.columns.get_loc('residual')]
 
     elif preprocess == 'fft':
-        train1 = pd.DataFrame(
-        {col: np.abs(fft(train1[col].values)) for col in train1.columns},
-        index=train1.index
-        )
-        test1 = pd.DataFrame(
-        {col: np.abs(fft(test1[col].values)) for col in test1.columns},
-        index=test1.index
-        )
-        target_index = [target_index]
+        fft_vals = np.fft.fft(train1.iloc[:,target_index])
+        fft_freqs = np.fft.fftfreq(len(fft_vals))
+        train1['fft_real'] = np.real(fft_vals)
+        train1['fft_mag'] = np.abs(fft_vals)
+
+        fft_vals = np.fft.fft(test1.iloc[:,target_index])
+        fft_freqs = np.fft.fftfreq(len(fft_vals))
+        test1['fft_real'] = np.real(fft_vals)
+        test1['fft_mag'] = np.abs(fft_vals)
+
+        target_index = [train1.columns.get_loc('fft_mag')]
     elif preprocess == 'None':
         target_index = [target_index]
     return train1, test1, target_index
@@ -160,35 +162,35 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         target_index = df.columns.to_list().index('OT')
         df['time_step'] = range(len(df))
         df = df.drop('date', axis=1)
-        train1, test1 = train_test_split_time_series(df, test_size=0.2)
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'soshianest_530486':
         df = pd.read_csv(r'data\\530486_dataset.csv')
         target_index = df.columns.to_list().index('OT')
         df['time_step'] = range(len(df))
         df = df.drop('date', axis=1)
-        train1, test1 = train_test_split_time_series(df, test_size=0.2)
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'soshianest_530501':
         df = pd.read_csv(r'data\\530501_dataset.csv')
         target_index = df.columns.to_list().index('OT')
         df['time_step'] = range(len(df))
         df = df.drop('date', axis=1)
-        train1, test1 = train_test_split_time_series(df, test_size=0.2)
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'soshianest_549324':
         df = pd.read_csv(r'data\\549324_dataset.csv')
         target_index = df.columns.to_list().index('OT')
         df['time_step'] = range(len(df))
         df = df.drop('date', axis=1)
-        train1, test1 = train_test_split_time_series(df, test_size=0.2)
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_aal':
         df = pd.read_csv(r'data\\aal.csv')
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
-        train1, test1 = train_test_split_time_series(df, test_size=0.2)
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
 
     elif dataset == 'fin_aapl':
@@ -196,49 +198,49 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
         target_index = df.columns.to_list().index('Close')
-        train1, test1 = train_test_split_time_series(df, test_size=0.2)
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_abbv':
+        df = pd.read_csv(r'data\\ABBV.csv')
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
-        df = pd.read_csv(r'data\\AABV.csv')
-        train1, test1 = train_test_split_time_series(df, test_size=0.2)
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_amd':
+        df = pd.read_csv(r'data\\AMD.csv')
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
-        df = pd.read_csv(r'data\\AMD.csv')
-        train1, test1 = train_test_split_time_series(df, test_size=0.2)
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_ko':
+        df = pd.read_csv(r'data\\KO.csv')
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
-        df = pd.read_csv(r'data\\KO.csv')
-        train1, test1 = train_test_split_time_series(df, test_size=0.2)
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_TSM':
+        df = pd.read_csv(r'data\\TSM.csv')
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
-        df = pd.read_csv(r'data\\TSM.csv')
-        train1, test1 = train_test_split_time_series(df, test_size=0.2)
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'goog':
+        df = pd.read_csv(r'data\\GOOG.csv')
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
-        df = pd.read_csv(r'data\\GOOG.csv')
-        train1, test1 = train_test_split_time_series(df, test_size=0.2)
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_wmt':
+        df = pd.read_csv(r'data\\WMT.csv')
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
-        df = pd.read_csv(r'data\\WMT.csv')
-        train1, test1 = train_test_split_time_series(df, test_size=0.2)
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
     if preprocess_type == 'decompose':
         output_dim = 3  # trend, seasonal, residual
     else:

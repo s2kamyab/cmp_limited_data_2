@@ -10,14 +10,14 @@ from utils.EDA import Explore_data
 
 def main():
     # Framework Settings
-    dataset_name = 'soshianest_549324'#'soshianest_530486'#'soshianest_5627'#'fin_aal'#'sp500'# 'soshianest_5627' # 'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 'fin_aal', 'fin_aapl', 'fin_abbv', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt'
+    dataset_name = 'fin_aal'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 'fin_aal', 'fin_aapl', 'fin_abbv', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt'
     # 'soshianest_5627', 'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 'fin_aal', 'fin_aapl', 'fin_abbv', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt'
     normalization = 'uniform'#'relative'#'uniform'# 'standard' # 'None'
     pred_len = 4
     seq_len = 16
     batch_size = 16
-    preprocess_type ='None'#'decompose'# 'None'#'decompose'
-    eda = False
+    preprocess_type ='fft'#'fft'#'decompose'#'None'#'decompose'# 'None'#'decompose'
+    eda = True
     model_type = 'cnn'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
     epoch = 100
     lr = 0.0001
