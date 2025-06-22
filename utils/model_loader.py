@@ -22,6 +22,7 @@ class GPT2TimeSeries(nn.Module):
 
     def forward(self, x):
         # x: [batch, seq_len, input_dim]
+        # x = x.float()  # Ensure input is float
         batch_size = x.size(0)
 
         x_embed = self.embedding(x) + self.pos_embedding  # [batch, seq_len, d_model]
@@ -63,6 +64,9 @@ class CNNTimeSeriesModel(nn.Module):
         self.dense = None#nn.Linear( out_features=output_dim)
 
     def forward(self, x):
+        if len(x.shape) == 2:
+            x = x.unsqueeze(1)
+        x = x.float()  # Ensure input is float
         x = x.permute(0, 2, 1)  # Convert to (batch, channels, seq_len)
         x = self.conv_layers(x)
         # x = x.permute(0, 2, 1)
@@ -190,7 +194,7 @@ def load_model(model_type, input_dim, output_dim, seq_len, pred_len, lr=0.0001):
     else:
         raise ValueError(f"Model type '{model_type}' is not recognized.")
     # Define loss function and optimizer
-    criterion = nn.MSELoss()
+    # criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)  # Adjust learning rate as needed
     
-    return model, criterion, optimizer
+    return model, optimizer

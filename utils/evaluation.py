@@ -2,9 +2,38 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from data_loader import normalise_selected_columns
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+def smape(y_true, y_pred):
+    denominator = (np.abs(y_true) + np.abs(y_pred)) / 2
+    # Avoid divide-by-zero
+    denominator = np.where(denominator == 0, 1e-8, denominator)
+    return np.mean(np.abs(y_pred - y_true) / denominator) * 100
+
+def mape(y_true, y_pred):
+    # Avoid divide-by-zero
+    y_true = np.where(y_true == 0, 1e-8, y_true)
+    return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+
+def evaluate_forecast(y_true, y_pred):
+    metrics = {
+        'MSE': mean_squared_error(y_true, y_pred),
+        'MAE': mean_absolute_error(y_true, y_pred),
+        'R2': r2_score(y_true, y_pred),
+        'SMAPE (%)': smape(y_true, y_pred),
+        'MAPE (%)': mape(y_true, y_pred)
+    }
+    return metrics
+############################################################################################
 def plot_sample_predictions(model,
-                                        common_cols, pred_len, test_loader_actual, normalization,target_index, preprocess,
-                                        num_samples=3, device='cpu'):
+                            common_cols, 
+                            pred_len, 
+                            test_loader_actual, 
+                            normalization,
+                            columns_to_normalize, 
+                            target_index, 
+                            preprocess,
+                            num_samples=3, 
+                            device='cpu'):
     model.eval()
 
     with torch.no_grad():
@@ -31,33 +60,40 @@ def plot_sample_predictions(model,
                 x_seq = x[i]#, j:j+seq_len]
                 # Calculate causal stats up to t (inclusive)
                 if normalization == 'standard':
-                    means = np.mean(x_seq, axis=0)#.mean()
-                    stds = np.std(x_seq, axis=0)#.std().replace(0, 1e-8)
+                    means = np.mean(x_seq[:, columns_to_normalize], axis=0)#.mean()
+                    stds = np.std(x_seq[:, columns_to_normalize], axis=0)#.std().replace(0, 1e-8)
                     
                     means = np.expand_dims(means, axis=0)
                     stds = np.expand_dims(stds, axis=0)
                     stds[stds == 0] = 1e-8
                     # Normalize past values (including target at time t)
-                    normalized = (x_seq - np.tile(means, [x_seq.shape[0], 1])) / np.tile(stds, [x_seq.shape[0], 1])
+                    normalized = x_seq
+                    normalized[:, columns_to_normalize] = (x_seq[:, columns_to_normalize] - np.tile(means, [x_seq.shape[0], 1])) / np.tile(stds, [x_seq.shape[0], 1])
                     # normalized.fillna(0, inplace=True)  # Fill NaN values with 0 after normalization
                     normalized = np.nan_to_num(normalized, nan=0)
                 elif normalization == 'uniform':
-                    mins = np.min(x_seq, axis=0)#.mean()
-                    maxs = np.max(x_seq, axis=0)#.std().replace(0, 1e-8)
+                    mins = np.min(x_seq[:, columns_to_normalize], axis=0)#.mean()
+                    maxs = np.max(x_seq[:, columns_to_normalize], axis=0)#.std().replace(0, 1e-8)
                     
                     mins = np.expand_dims(mins, axis=0)
                     maxs = np.expand_dims(maxs, axis=0)
                     # mins[mins == 0] = 1e-8
                     # Normalize past values (including target at time t)
-                    normalized = (x_seq - np.tile(mins, [x_seq.shape[0], 1])) / np.tile(maxs-mins, [x_seq.shape[0], 1])
+                    normalized = x_seq
+                    normalized[:, columns_to_normalize] = (x_seq[:, columns_to_normalize] - np.tile(mins, [x_seq.shape[0], 1])) / np.tile(maxs-mins, [x_seq.shape[0], 1])
                     # normalized.fillna(0, inplace=True)  # Fill NaN values with 0 after normalization
                     normalized = np.nan_to_num(normalized, nan=0)
                 elif normalization == 'relative':
-                    normalized = normalise_selected_columns(x_seq, common_cols, single_window=False)
+                    normalized = normalise_selected_columns(x_seq, columns_to_normalize, single_window=True)
                     normalized = np.nan_to_num(normalized, nan=0)
+                elif normalization == 'None':
+                    normalized = x_seq
                     
                 with torch.no_grad():
-                    pred = model(torch.unsqueeze(torch.tensor(normalized), dim=0))
+                    if normalization == 'None':
+                        pred = model(torch.unsqueeze(torch.tensor(x_seq).float(), dim=0))
+                    else:
+                        pred = model(torch.unsqueeze(torch.tensor(normalized).float(), dim=0))
                     pred = pred.squeeze()
                     if len(pred.shape) == 1:
                         pred = torch.unsqueeze(pred, dim=1) 
@@ -73,6 +109,8 @@ def plot_sample_predictions(model,
                     elif normalization == 'uniform':
                         pred_actual = t * (maxs[0, target_indexes] - mins[0, target_indexes]) + mins[0, target_indexes]
                     elif normalization == 'relative':
+                        pred_actual = t * x_seq[-1, target_index] #+ 1
+                    elif normalization == 'None':
                         pred_actual = t
 
                     # t = pred[:,1].cpu().numpy()
@@ -108,7 +146,7 @@ def plot_sample_predictions(model,
                     x_hist = x_actual_list[i][:, target_index]#.cpu().numpy()
                     y_true = np.array(gt_actual_list[i])#.item()
                     if normalization == 'relative':
-                        y_hat = (np.array(pred_actual_list[i])+1)* x_actual_list[i][-2, target_index]#
+                        y_hat = np.array(pred_actual_list[i])#(np.array(pred_actual_list[i])+1)* x_actual_list[i][-2, target_index]#
                         # y_true = np.array(gt_actual_list[i]/x_actual_list[i][-2, target_index])
                         # x_hist = x_hist / x_actual_list[i][-2, target_index]
                         
@@ -141,13 +179,93 @@ def plot_training_curves(train_losses, val_losses):
     plt.tight_layout()
 
 
-def evaluate_model(trained_model, test_loader_actual, common_cols, 
-                   train_losses, val_losses, pred_len, normalization,target_index, preprocess, num_samples=3, device='cpu'):
+def evaluate_model(model, 
+                   test_loader, 
+                   test_loader_actual, 
+                   common_cols, 
+                   train_losses, 
+                   val_losses, 
+                   pred_len, 
+                   normalization,
+                   column_to_normalize, 
+                   target_index, 
+                   preprocess, 
+                   num_samples=3, 
+                   device='cpu'):
 
+    # Assume `model` and `test_dataloader` are already defined
+    model.eval()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+
+    all_preds = []
+    all_targets = []
+
+    with torch.no_grad():
+        for batch in test_loader_actual:
+            inputs, targets = batch  # Modify if using dict or named tuple
+            inputs = inputs.to(device)
+            targets = targets.to(device)
+            if normalization == 'None':
+                inputs_norm = inputs.float()
+            elif normalization == 'standard':
+                inputs_norm = inputs.float()
+                means = inputs.mean(dim=1, keepdim=True)
+                stds = inputs.std(dim=1, keepdim=True).replace(0, 1e-8)
+                inputs_norm = (inputs_norm - means) / stds
+            elif normalization == 'uniform':
+                inputs_norm = inputs.float()
+                mins = inputs.min(dim=1, keepdim=True).values
+                maxs = inputs.max(dim=1, keepdim=True).values
+                inputs_norm = (inputs_norm - mins) / (maxs - mins)
+            elif normalization == 'relative':
+                inputs_norm = normalise_selected_columns(inputs, column_to_normalize, single_window=False)
+                inputs_norm = torch.tensor(inputs_norm, dtype=torch.float32)  
+
+
+            if len(inputs_norm.shape) == 2:
+                inputs_norm = inputs_norm.unsqueeze(0)
+
+            outputs = model(inputs_norm)
+            
+            if normalization == 'standard':
+                # means = inputs.mean(dim=1, keepdim=True)
+                # stds = inputs.std(dim=1, keepdim=True).replace(0, 1e-8)
+                outputs = outputs * stds + means
+            elif normalization == 'uniform':
+                # mins = inputs.min(dim=1, keepdim=True).values
+                # maxs = inputs.max(dim=1, keepdim=True).values
+                outputs = outputs * (maxs - mins) + mins
+            elif normalization == 'relative':
+                outputs = outputs * torch.tile(inputs[:, -1, target_index].unsqueeze(1) , [1,4,1])
+
+                
+            all_preds.append(outputs.cpu().numpy())
+            all_targets.append(targets.cpu().numpy())
+
+    # Concatenate all batches
+    y_pred = np.concatenate(all_preds, axis=0).squeeze()
+    y_test = np.concatenate(all_targets, axis=0).squeeze()
+
+    # Evaluate
+    metrics = evaluate_forecast(y_test, y_pred)
+    for metric, value in metrics.items():
+        print(f"{metric}: {value:.4f}")
+    
+    
+    
     plot_training_curves(train_losses, val_losses)
-    plt.show()
+    # plt.show()
 
-    plot_sample_predictions(trained_model,
-                                        common_cols, pred_len, test_loader_actual, normalization,target_index, preprocess,
-                                        num_samples=num_samples, device=device)
+    plot_sample_predictions(model,
+                            common_cols, 
+                            pred_len, 
+                            test_loader_actual, 
+                            normalization, 
+                            column_to_normalize, 
+                            target_index, 
+                            preprocess,
+                            num_samples=num_samples, 
+                            device=device)
+
     plt.show()

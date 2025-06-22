@@ -27,28 +27,48 @@ def decompose_series(series, model='additive', freq=None):
         'resid': result.resid
     }
 
+def normalise_selected_columns(window_data,columns_to_normalise, single_window=True):
+        normalised_data = []
+        window_data = [window_data] if single_window else window_data
+        for window in window_data:
+            normalised_window = []
+            if len(window.shape) == 1:
+                window = np.expand_dims(window, axis=0)  # Ensure window is 2D
+            for col_i in range(window.shape[1]):
+                if col_i in columns_to_normalise:
+                    # Normalize only if the column index is in the list of columns to normalize
+                    w = window[-1, col_i]
+                    if w == 0:
+                        w = 1
+                    normalised_col = [((float(p) / float(w)) ) for p in window[:, col_i]]
+                else:
+                    # Keep the original data for columns not in the list
+                    normalised_col = window[:, col_i].tolist()
+                normalised_window.append(normalised_col)
+            normalised_data.append(np.squeeze(np.array(normalised_window).T))
+            # normalised_data.append(normalised_window)
+        return np.squeeze(np.array(normalised_data))
+# def normalise_selected_columns(window_data, columns_to_normalise, single_window=False):
+#         # normalised_data = []
+#         # window_data = [window_data] if single_window else window_data
+#         # for window in window_data:
+#         # normalised_window = []
+#         # for ts_i in range(window_data.shape[0]):
+#             # if col_i in columns_to_normalise:
+#                 # Normalize only if the column index is in the list of columns to normalize
+#         w = window_data[-2]
+#         w[w==0] = 1
+#         normalised_window = window_data/w-1#[((p / w) - 1) for p in window_data]
+#             # else:
+#                 # Keep the original data for columns not in the list
+#                 # normalised_col = window[col_i].tolist()
+#         # normalised_window.append(normalised_col)
+#         # normalised_window = np.array(normalised_window).T
+#         # normalised_data.append(normalised_window)
+#         return np.array(normalised_window)
 
-def normalise_selected_columns(window_data, columns_to_normalise, single_window=False):
-        # normalised_data = []
-        # window_data = [window_data] if single_window else window_data
-        # for window in window_data:
-        # normalised_window = []
-        # for ts_i in range(window_data.shape[0]):
-            # if col_i in columns_to_normalise:
-                # Normalize only if the column index is in the list of columns to normalize
-        w = window_data[-2]
-        w[w==0] = 1
-        normalised_window = window_data/w-1#[((p / w) - 1) for p in window_data]
-            # else:
-                # Keep the original data for columns not in the list
-                # normalised_col = window[col_i].tolist()
-        # normalised_window.append(normalised_col)
-        # normalised_window = np.array(normalised_window).T
-        # normalised_data.append(normalised_window)
-        return np.array(normalised_window)
 
-
-def create_seqs_normalized(dfs, common_cols, seq_len, pred_len, normalization, target_index):
+def create_seqs_normalized(dfs, common_cols, seq_len, pred_len, normalization, columns_to_normalize, target_index):
     datasets = []
     datasets_actual = []
     # target_index = [common_cols.index('trend'), common_cols.index('seasonal'), common_cols.index('residual')]
@@ -61,33 +81,36 @@ def create_seqs_normalized(dfs, common_cols, seq_len, pred_len, normalization, t
             x_seq = values[i:i+seq_len, :]
             y_seq = values[i+seq_len: i+seq_len+pred_len, target_index]#values[i+1:i+seq_len+1, target_index]  # just target feature
             # Calculate causal stats up to t (inclusive)
-            if normalization == 'standard':
-                means = np.mean(x_seq, axis=0)#.mean()
-                stds = np.std(x_seq, axis=0)#.std().replace(0, 1e-8)
-                stds[stds == 0] = 1e-8  # avoid divide-by-zero
-                means = np.expand_dims(means, axis=0)
-                stds = np.expand_dims(stds, axis=0)
-                # Normalize past values (including target at time t)
-                x_seq_normalized = (x_seq - np.tile(means, [x_seq.shape[0], 1])) / np.tile(stds, [x_seq.shape[0], 1])
-                x_seq_normalized = np.nan_to_num(x_seq_normalized, nan=0)
-                y_seq_normalized = (y_seq - means[0, target_index]) / stds[0, target_index]
-                y_seq_normalized = np.nan_to_num(y_seq_normalized, nan=0)
-            elif normalization == 'uniform':
-                maxs = np.max(x_seq, axis =0)
-                maxs = np.expand_dims(maxs,axis = 0 )
-                mins = np.min(x_seq, axis = 0)
-                mins = np.expand_dims(mins,axis = 0 )
-                x_seq_normalized = (x_seq - np.tile(mins, [x_seq.shape[0], 1])) / np.tile(maxs-mins, [x_seq.shape[0], 1])
-                x_seq_normalized = np.nan_to_num(x_seq_normalized, nan=0)
-                y_seq_normalized = (y_seq - np.tile(mins[0, target_index], [y_seq.shape[0], 1])) / np.tile(maxs[0, target_index]-mins[0, target_index], [y_seq.shape[0], 1]) #if (maxs[0, target_index]-mins[0, target_index]) != 0 else 1)
-                y_seq_normalized = np.nan_to_num(y_seq_normalized, nan=0)
-            elif normalization == 'relative':
-                t = normalise_selected_columns(values[i:i+seq_len+pred_len], range(len(common_cols)), single_window=False)
-                x_seq_normalized = t[:seq_len, :]
-                y_seq_normalized = t[seq_len:, target_index]
-            elif normalization == 'None':
-                x_seq_normalized = x_seq
-                y_seq_normalized = y_seq
+            # if normalization == 'standard':
+            #     means = np.mean(x_seq[:, columns_to_normalize], axis=0)#.mean()
+            #     stds = np.std(x_seq[:, columns_to_normalize], axis=0)#.std().replace(0, 1e-8)
+            #     stds[stds == 0] = 1e-8  # avoid divide-by-zero
+            #     means = np.expand_dims(means, axis=0)
+            #     stds = np.expand_dims(stds, axis=0)
+            #     # Normalize past values (including target at time t)
+            #     x_seq_normalized = x_seq.copy()
+            #     x_seq_normalized[:, columns_to_normalize] = (x_seq[:, columns_to_normalize] - np.tile(means, [x_seq[:, columns_to_normalize].shape[0], 1])) / np.tile(stds, [x_seq[:, columns_to_normalize].shape[0], 1])
+            #     x_seq_normalized = np.nan_to_num(x_seq_normalized, nan=0)
+            #     y_seq_normalized = (y_seq - means[0, target_index]) / stds[0, target_index]
+            #     y_seq_normalized = np.nan_to_num(y_seq_normalized, nan=0)
+            # elif normalization == 'uniform':
+            #     x_seq_normalized = x_seq.copy()
+            #     maxs = np.max(x_seq[:, columns_to_normalize], axis =0)
+            #     maxs = np.expand_dims(maxs,axis = 0 )
+            #     mins = np.min(x_seq[:, columns_to_normalize], axis = 0)
+            #     mins = np.expand_dims(mins,axis = 0 )
+            #     x_seq_normalized[:, columns_to_normalize] = (x_seq[:, columns_to_normalize] - np.tile(mins, [x_seq.shape[0], 1])) / np.tile(maxs-mins, [x_seq.shape[0], 1])
+            #     x_seq_normalized = np.nan_to_num(x_seq_normalized, nan=0)
+            #     y_seq_normalized = (y_seq - np.tile(mins[0, target_index], [y_seq.shape[0], 1])) / np.tile(maxs[0, target_index]-mins[0, target_index], [y_seq.shape[0], 1]) #if (maxs[0, target_index]-mins[0, target_index]) != 0 else 1)
+            #     y_seq_normalized = np.nan_to_num(y_seq_normalized, nan=0)
+            # elif normalization == 'relative':
+            #     # x_seq_normalized = x_seq.copy()
+            #     t = normalise_selected_columns(values[i:i+seq_len+pred_len], columns_to_normalize, single_window=True)
+            #     x_seq_normalized = t[:seq_len, :]
+            #     y_seq_normalized = t[seq_len:, target_index]
+            # if normalization == 'None':
+            x_seq_normalized = x_seq
+            y_seq_normalized = y_seq
 
                 
             x_list.append(x_seq_normalized)
@@ -156,33 +179,53 @@ def preprocess(preprocess, train1, test1, target_index):
 ###########################################################################################
 # load data
 ###########################################################################################
-def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalization):
+def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalization, use_sentiment):
     if dataset == 'soshianest_5627':
         df = pd.read_csv(r'data\\5627_dataset.csv')
         target_index = df.columns.to_list().index('OT')
         df['time_step'] = range(len(df))
-        df = df.drop('date', axis=1)
+        # df = df.drop('date', axis=1)
+        columns_to_normalize = range(len(df.columns))
+        columns_to_normalize = [columns_to_normalize[:-2]] # exclude sentiment column
+        if use_sentiment == False:
+            df = df.drop('Sentiment_textblob', axis=1)
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
+        
 
     elif dataset == 'soshianest_530486':
         df = pd.read_csv(r'data\\530486_dataset.csv')
         target_index = df.columns.to_list().index('OT')
         df['time_step'] = range(len(df))
-        df = df.drop('date', axis=1)
+        # df = df.drop('date', axis=1)
+        columns_to_normalize = range(len(df.columns))
+        columns_to_normalize = [columns_to_normalize[:-2]] # exclude sentiment column
+        if use_sentiment == False:
+            df = df.drop('Sentiment_textblob', axis=1)
+            
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'soshianest_530501':
         df = pd.read_csv(r'data\\530501_dataset.csv')
         target_index = df.columns.to_list().index('OT')
         df['time_step'] = range(len(df))
-        df = df.drop('date', axis=1)
+        # df = df.drop('date', axis=1)
+        columns_to_normalize = range(len(df.columns))
+        columns_to_normalize = [columns_to_normalize[:-1]] # exclude sentiment column
+        if use_sentiment == False:
+            df = df.drop('Sentiment_textblob', axis=1)
+            
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'soshianest_549324':
         df = pd.read_csv(r'data\\549324_dataset.csv')
         target_index = df.columns.to_list().index('OT')
         df['time_step'] = range(len(df))
-        df = df.drop('date', axis=1)
+        # df = df.drop('date', axis=1)
+        columns_to_normalize = range(len(df.columns))
+        columns_to_normalize = [columns_to_normalize[:-1]] # exclude sentiment column
+        if use_sentiment == False:
+            df = df.drop('Sentiment_textblob', axis=1)
+            
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_aal':
@@ -190,13 +233,35 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
+        
+        if use_sentiment == False:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+        # Columns to exclude
+        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        columns_to_normalize = [df.columns.get_loc(col) for col in include_cols]  
+
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
 
     elif dataset == 'fin_aapl':
         df = pd.read_csv(r'data\\AAPL.csv')
+        # df = df.loc[:,['Date', 'Close', 'Volume', 'Scaled_sentiment']]
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
+        df = df.drop('News_flag', axis=1)
+        
+        if use_sentiment == False:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+        # Columns to exclude
+        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        cols = df.columns#[df.columns.get_loc(col) for col in include_cols]  
+        columns_to_normalize = [df.columns.get_loc(col) for col in cols]  
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
@@ -205,6 +270,16 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
+        
+        if use_sentiment == False:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+        # Columns to exclude
+        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
+
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_amd':
@@ -212,13 +287,34 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
+        if use_sentiment == False:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+        # Columns to exclude
+        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
+
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_ko':
         df = pd.read_csv(r'data\\KO.csv')
-        target_index = df.columns.to_list().index('Close')
+        target_index =  df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
+
+        
+        if use_sentiment == False:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+
+        # Columns to exclude
+        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
+
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_TSM':
@@ -226,6 +322,16 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
+        if use_sentiment == False:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+
+        # Columns to exclude
+        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
+
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'goog':
@@ -233,6 +339,17 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
+
+        if use_sentiment == False:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+
+        # Columns to exclude
+        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
+
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_wmt':
@@ -240,14 +357,25 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
+        
+        if use_sentiment == False:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+
+        # Columns to exclude
+        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
+
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
     if preprocess_type == 'decompose':
         output_dim = 3  # trend, seasonal, residual
     else:
         output_dim = 1
     train1, test1, target_index = preprocess(preprocess_type, train1, test1, target_index)   
-    train_dataset, input_dim, train_dataset_actual = create_seqs_normalized([train1],train1.columns, seq_len, pred_len, normalization, target_index)
-    test_dataset, input_dim, test_dataset_actual = create_seqs_normalized([test1],test1.columns, seq_len, pred_len, normalization, target_index)
+    train_dataset, input_dim, train_dataset_actual = create_seqs_normalized([train1],train1.columns, seq_len, pred_len, normalization, columns_to_normalize, target_index)
+    test_dataset, input_dim, test_dataset_actual = create_seqs_normalized([test1],test1.columns, seq_len, pred_len, normalization, columns_to_normalize, target_index)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     train_loader_actual = DataLoader(train_dataset_actual, batch_size=batch_size, shuffle=True)
@@ -255,7 +383,7 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
     # if eda:
     #     plot_train_test_target_distributions(train_loader, test_loader, num_outputs=len(target_index))
-    return train_loader, test_loader, train_loader_actual, test_loader_actual, input_dim, output_dim, train1.columns.tolist(), target_index
+    return train_loader, test_loader, train_loader_actual, test_loader_actual, input_dim, output_dim, train1.columns.tolist(), target_index, columns_to_normalize
 # # Test csvs = 50
 #     names_50 = ['aal.csv', 'AAPL.csv', 'ABBV.csv', 'AMD.csv', 'amgn.csv', 'AMZN.csv', 'BABA.csv',
 #                 'bhp.csv', 'bidu.csv', 'biib.csv', 'BRK-B.csv', 'C.csv', 'cat.csv', 'cmcsa.csv', 'cmg.csv',

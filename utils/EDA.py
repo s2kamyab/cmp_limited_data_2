@@ -112,8 +112,37 @@ def compute_feature_correlation(dataloader, features):
 
     return corr_matrix
 
+def extract_sentiment_and_target(dataloader, sentiment_idx, device='cpu'):
+    sentiment_all = []
+    target_all = []
+    
+    for inputs, targets in dataloader:
+        inputs = inputs.to(device)
+        targets = targets.to(device)
 
-def Explore_data(eda, train_loader, test_loader, preprocess_type, features, data_name):
+        sentiment = inputs[:, :, sentiment_idx]  # shape: (B, seq_len)
+        sentiment_all.append(sentiment.cpu())
+        target_all.append(targets[:, -1].cpu())  # assuming last target is what you're forecasting
+
+    # Stack into single arrays
+    sentiment_all = torch.cat(sentiment_all, dim=0).numpy()  # (N, seq_len)
+    target_all = torch.cat(target_all, dim=0).numpy().flatten()  # (N,)
+    return sentiment_all, target_all
+
+def compute_lagged_correlation(sentiment_array, target_array, max_lag=10):
+    correlations = {}
+    df = pd.DataFrame(sentiment_array)
+    
+    for lag in range(1, max_lag + 1):
+        # Lag each row by shifting to the right (i.e., past values)
+        lagged_vals = df.shift(periods=lag, axis=1)
+        mean_sentiment = lagged_vals.mean(axis=1)  # average over lagged timesteps
+        correlations[f'lag_{lag}'] = mean_sentiment.corr(pd.Series(target_array))
+
+    return pd.Series(correlations)
+
+
+def Explore_data(eda, train_loader, test_loader, preprocess_type, features, data_name, use_sentiment):
     if preprocess_type == 'decompose':
         num_outputs = 3
     else:
@@ -135,7 +164,17 @@ def Explore_data(eda, train_loader, test_loader, preprocess_type, features, data
             print(f"min KS Test p-values: {np.min(np.array(ks_p_value))}")
             print(f"min Pearson Correlation Coefficients: {np.min(np.array(p_corr))}")
             print(f"min Jensen-Shannon Divergences: {np.min(np.array(js_similarity))}")
-
+    if use_sentiment:
+        sentiment_idx = -1  # change this to your sentiment feature index
+        sentiment_array, target_array = extract_sentiment_and_target(train_loader, sentiment_idx)
+        correlations = compute_lagged_correlation(sentiment_array, target_array, max_lag=20)
+        correlations.plot(kind='bar', title='Correlation of Lagged Sentiment with Target')
+        plt.xlabel('Lag')
+        plt.ylabel('Correlation')
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+            
     # if corr:
         # print("Calculating and plotting correlation matrix...")
         # # Assuming train_loader contains the training data
