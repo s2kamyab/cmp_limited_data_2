@@ -182,67 +182,69 @@ def preprocess(preprocess, train1, test1, target_index):
 def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalization, use_sentiment):
     if dataset == 'soshianest_5627':
         df = pd.read_csv(r'data\\5627_dataset.csv')
-        target_index = df.columns.to_list().index('OT')
+        
         df['time_step'] = range(len(df))
         # df = df.drop('date', axis=1)
         columns_to_normalize = range(len(df.columns))
-        columns_to_normalize = [columns_to_normalize[:-2]] # exclude sentiment column
+        # columns_to_normalize = [columns_to_normalize[:-2]] # exclude sentiment column
         if use_sentiment == False:
             df = df.drop('Sentiment_textblob', axis=1)
+        target_index = df.columns.to_list().index('OT')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
         
 
     elif dataset == 'soshianest_530486':
         df = pd.read_csv(r'data\\530486_dataset.csv')
-        target_index = df.columns.to_list().index('OT')
+        
         df['time_step'] = range(len(df))
         # df = df.drop('date', axis=1)
         columns_to_normalize = range(len(df.columns))
-        columns_to_normalize = [columns_to_normalize[:-2]] # exclude sentiment column
+        # columns_to_normalize = [columns_to_normalize[:-2]] # exclude sentiment column
         if use_sentiment == False:
             df = df.drop('Sentiment_textblob', axis=1)
-            
+        target_index = df.columns.to_list().index('OT')  
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'soshianest_530501':
         df = pd.read_csv(r'data\\530501_dataset.csv')
-        target_index = df.columns.to_list().index('OT')
+        
         df['time_step'] = range(len(df))
         # df = df.drop('date', axis=1)
         columns_to_normalize = range(len(df.columns))
-        columns_to_normalize = [columns_to_normalize[:-1]] # exclude sentiment column
+        # columns_to_normalize = [columns_to_normalize[:-1]] # exclude sentiment column
         if use_sentiment == False:
             df = df.drop('Sentiment_textblob', axis=1)
-            
+        target_index = df.columns.to_list().index('OT')    
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'soshianest_549324':
         df = pd.read_csv(r'data\\549324_dataset.csv')
-        target_index = df.columns.to_list().index('OT')
+        
         df['time_step'] = range(len(df))
         # df = df.drop('date', axis=1)
         columns_to_normalize = range(len(df.columns))
-        columns_to_normalize = [columns_to_normalize[:-1]] # exclude sentiment column
+        # columns_to_normalize = [columns_to_normalize[:-1]] # exclude sentiment column
         if use_sentiment == False:
             df = df.drop('Sentiment_textblob', axis=1)
-            
+        target_index = df.columns.to_list().index('OT')    
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_aal':
         df = pd.read_csv(r'data\\aal.csv')
-        target_index = df.columns.to_list().index('Close')
+        
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
+        df = df.drop('News_flag', axis=1)
         
         if use_sentiment == False:
             df = df.drop('Scaled_sentiment', axis=1)
             df = df.drop('Sentiment_gpt', axis=1)
         # Columns to exclude
-        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
         # Get indexes of columns to keep
         include_cols = [col for col in df.columns if col not in exclude_cols]
         columns_to_normalize = [df.columns.get_loc(col) for col in include_cols]  
-
+        target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
 
@@ -257,7 +259,7 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
             df = df.drop('Scaled_sentiment', axis=1)
             df = df.drop('Sentiment_gpt', axis=1)
         # Columns to exclude
-        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        exclude_cols =[]# ['Scaled_sentiment', 'Sentiment_gpt']
         # Get indexes of columns to keep
         include_cols = [col for col in df.columns if col not in exclude_cols]
         cols = df.columns#[df.columns.get_loc(col) for col in include_cols]  
@@ -267,19 +269,20 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
 
     elif dataset == 'fin_abbv':
         df = pd.read_csv(r'data\\ABBV.csv')
-        target_index = df.columns.to_list().index('Close')
+        
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
+        df = df.drop('News_flag', axis=1)
         
         if use_sentiment == False:
             df = df.drop('Scaled_sentiment', axis=1)
             df = df.drop('Sentiment_gpt', axis=1)
         # Columns to exclude
-        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
         # Get indexes of columns to keep
         include_cols = [col for col in df.columns if col not in exclude_cols]
         columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
-
+        target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_amd':
@@ -287,34 +290,34 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
+        df = df.drop('News_flag', axis=1)
+
         if use_sentiment == False:
             df = df.drop('Scaled_sentiment', axis=1)
             df = df.drop('Sentiment_gpt', axis=1)
         # Columns to exclude
-        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
         # Get indexes of columns to keep
         include_cols = [col for col in df.columns if col not in exclude_cols]
         columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
-
+        target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_ko':
         df = pd.read_csv(r'data\\KO.csv')
-        target_index =  df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
-
+        df = df.drop('News_flag', axis=1)
         
         if use_sentiment == False:
             df = df.drop('Scaled_sentiment', axis=1)
             df = df.drop('Sentiment_gpt', axis=1)
 
-        # Columns to exclude
-        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
         # Get indexes of columns to keep
         include_cols = [col for col in df.columns if col not in exclude_cols]
         columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
-
+        target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_TSM':
@@ -322,16 +325,16 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
+        df = df.drop('News_flag', axis=1)
         if use_sentiment == False:
             df = df.drop('Scaled_sentiment', axis=1)
             df = df.drop('Sentiment_gpt', axis=1)
 
-        # Columns to exclude
-        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
         # Get indexes of columns to keep
         include_cols = [col for col in df.columns if col not in exclude_cols]
         columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
-
+        target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'goog':
@@ -339,17 +342,16 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
-
+        df = df.drop('News_flag', axis=1)
         if use_sentiment == False:
             df = df.drop('Scaled_sentiment', axis=1)
             df = df.drop('Sentiment_gpt', axis=1)
 
-        # Columns to exclude
-        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
         # Get indexes of columns to keep
         include_cols = [col for col in df.columns if col not in exclude_cols]
         columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
-
+        target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
     elif dataset == 'fin_wmt':
@@ -357,23 +359,24 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
-        
+        df = df.drop('News_flag', axis=1)
         if use_sentiment == False:
             df = df.drop('Scaled_sentiment', axis=1)
             df = df.drop('Sentiment_gpt', axis=1)
 
-        # Columns to exclude
-        exclude_cols = ['Scaled_sentiment', 'Sentiment_gpt']
+        exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
         # Get indexes of columns to keep
         include_cols = [col for col in df.columns if col not in exclude_cols]
         columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
-
+        target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
     if preprocess_type == 'decompose':
         output_dim = 3  # trend, seasonal, residual
     else:
         output_dim = 1
     train1, test1, target_index = preprocess(preprocess_type, train1, test1, target_index)   
+    if preprocess_type == 'decompose':
+        columns_to_normalize = range(len(train1.columns))#[train1.columns.get_loc('trend'), train1.columns.get_loc('seasonal'), train1.columns.get_loc('residual')]
     train_dataset, input_dim, train_dataset_actual = create_seqs_normalized([train1],train1.columns, seq_len, pred_len, normalization, columns_to_normalize, target_index)
     test_dataset, input_dim, test_dataset_actual = create_seqs_normalized([test1],test1.columns, seq_len, pred_len, normalization, columns_to_normalize, target_index)
 

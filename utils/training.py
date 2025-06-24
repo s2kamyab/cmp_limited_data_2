@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class SMAPELoss(nn.Module):
@@ -172,8 +173,18 @@ def train_model(model,
                 output = output_norm * torch.tile(torch.unsqueeze(ref[:,  target_index], dim=1), [1,y.shape[1],1] )
             # x, y = x.to(device), y.to(device)
             # # 4. Weighted MSE Loss
+            if len(output.shape) == 3:
+                if output.shape[2] == 3: # preprocess == decompose
+                    output = output.sum(dim=2)  # sum over the last dimension
+                    y = y.sum(dim=2)  # sum over the last dimension
             loss = criterion(torch.squeeze(output), torch.squeeze(y))#torch.mean(weights * (model_residual(x) - y)**2)
+            # Compute MSE per element, no reduction
+            # y_pred = torch.squeeze(output)
+            # y_true = torch.squeeze(y)
+            # mse_per_element = F.mse_loss(y_pred, y_true, reduction='none')  # shape: (B, T, n)
 
+            # # Average over seq_len and feature dims to get per-sample loss
+            # loss = mse_per_element.mean(dim=[1, 2], keepdim=True)  # shape: (B, 1)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()

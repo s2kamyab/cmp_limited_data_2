@@ -57,7 +57,7 @@ def plot_sample_predictions(model,
                     target_indexes = [target_index1, target_index2, target_index3]
                 else:
                     target_indexes = [target_index]
-                x_seq = x[i]#, j:j+seq_len]
+                x_seq = x[i].copy()
                 # Calculate causal stats up to t (inclusive)
                 if normalization == 'standard':
                     means = np.mean(x_seq[:, columns_to_normalize], axis=0)#.mean()
@@ -94,15 +94,17 @@ def plot_sample_predictions(model,
                         pred = model(torch.unsqueeze(torch.tensor(x_seq).float(), dim=0))
                     else:
                         pred = model(torch.unsqueeze(torch.tensor(normalized).float(), dim=0))
+
                     pred = pred.squeeze()
+
                     if len(pred.shape) == 1:
                         pred = torch.unsqueeze(pred, dim=1) 
+
                     y_pred_total = []
                     x_batch_total = []
                     y_gt_total = []
-                    # for k in range(pred.shape[0]):
-                    t= pred.cpu().numpy()
-                    # t = np.squeeze(t)
+                    t = pred.cpu().numpy()
+
                     if normalization == 'standard':
                         # De-normalize the predictions
                         pred_actual = t * stds[0, target_indexes] + means[0, target_indexes]
@@ -113,22 +115,12 @@ def plot_sample_predictions(model,
                     elif normalization == 'None':
                         pred_actual = t
 
-                    # t = pred[:,1].cpu().numpy()
-                    # t = np.squeeze(t)
-                    # pred_actual_resid = t * stds[0, target_index2] + means[0, target_index2]
-
-                    # t = pred[:,2].cpu().numpy()
-                    # t = np.squeeze(t)
-                    # pred_actual_seasonal = t * stds[0, target_index3] + means[0, target_index3]
-
-                
-                
                     # Combine predictions
                     y_pred_total = np.sum(pred_actual, axis=1)#pred_actual_trend + pred_actual_seasonal + pred_actual_resid
                     if len(y_pred_total.shape) == 1:
                         y_pred_total = np.expand_dims(y_pred_total, axis=1)
                     # target_index = common_cols.index('OT')
-                    x_batch_total =  x[i] 
+                    x_batch_total =  x[i].copy() 
                     y_gt_total = np.sum(y[i,:,:], axis=1)#y[i,:,0] + y[i,:,1] + y[i,:, 2]
                     if len(y_gt_total.shape) == 1:
                         y_gt_total = np.expand_dims(y_gt_total, axis=1)
@@ -144,6 +136,8 @@ def plot_sample_predictions(model,
                     # target_index = common_cols.index('OT')
                     # x_hist = x_batch_total[:, target_index]
                     x_hist = x_actual_list[i][:, target_index]#.cpu().numpy()
+                    if len(target_indexes[0]) > 1:
+                        x_hist = np.sum(x_hist, axis=1)
                     y_true = np.array(gt_actual_list[i])#.item()
                     if normalization == 'relative':
                         y_hat = np.array(pred_actual_list[i])#(np.array(pred_actual_list[i])+1)* x_actual_list[i][-2, target_index]#
@@ -211,7 +205,8 @@ def evaluate_model(model,
             elif normalization == 'standard':
                 inputs_norm = inputs.float()
                 means = inputs.mean(dim=1, keepdim=True)
-                stds = inputs.std(dim=1, keepdim=True).replace(0, 1e-8)
+                stds = inputs.std(dim=1, keepdim=True)#.replace(0, 1e-8)
+                stds[stds == 0] = 1e-8  # Avoid division by zero
                 inputs_norm = (inputs_norm - means) / stds
             elif normalization == 'uniform':
                 inputs_norm = inputs.float()
@@ -226,22 +221,25 @@ def evaluate_model(model,
             if len(inputs_norm.shape) == 2:
                 inputs_norm = inputs_norm.unsqueeze(0)
 
-            outputs = model(inputs_norm)
-            
+            outputs_norm = model(inputs_norm)
+            t = outputs_norm
             if normalization == 'standard':
                 # means = inputs.mean(dim=1, keepdim=True)
                 # stds = inputs.std(dim=1, keepdim=True).replace(0, 1e-8)
-                outputs = outputs * stds + means
+                outputs = t * stds[:,:,target_index] + means[:,:,target_index]
             elif normalization == 'uniform':
                 # mins = inputs.min(dim=1, keepdim=True).values
                 # maxs = inputs.max(dim=1, keepdim=True).values
-                outputs = outputs * (maxs - mins) + mins
+                outputs = t * (maxs[:,:,target_index] - mins[:,:,target_index]) + mins[:,:,target_index]
             elif normalization == 'relative':
-                outputs = outputs * torch.tile(inputs[:, -1, target_index].unsqueeze(1) , [1,4,1])
-
-                
-            all_preds.append(outputs.cpu().numpy())
-            all_targets.append(targets.cpu().numpy())
+                outputs = t * torch.tile(inputs[:, -1, target_index].unsqueeze(1) , [1,pred_len,1])
+            outputs = outputs.cpu().numpy()
+            targets = targets.cpu().numpy()
+            if len(outputs.shape) == 3:
+                outputs = np.sum(outputs, axis=-1)  
+                targets = np.sum(targets, axis=-1)  
+            all_preds.append(outputs)
+            all_targets.append(targets)
 
     # Concatenate all batches
     y_pred = np.concatenate(all_preds, axis=0).squeeze()
