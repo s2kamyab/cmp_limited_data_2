@@ -37,127 +37,98 @@ def plot_sample_predictions(model,
     model.eval()
 
     with torch.no_grad():
-        # for x_batch, y_batch in test_loader:
-        for x,y in test_loader_actual :#zip(
-        #test_loader_trend_actual, test_loader_seasonal_actual, test_loader_residual_actual):
-            # x_batch_res, y_batch_res = next(iter(test_loader_residual))
+       
+        for i in range(5):#len(y) ):
+            x, y = next(iter(test_loader_actual))
             x = x.to(device).numpy()
             y = y.to(device).numpy()
-            
+            if preprocess == 'decomposed':
+                target_index1 = common_cols.index('trend')
+                # target_index2 = common_cols.index('residual')
+                target_index3 = common_cols.index('seasonal')
+                target_indexes = [target_index1,  target_index3]#[target_index1, target_index2, target_index3]
+            else:
+                target_indexes = [target_index]
+            x_seq = x[i].copy()
+            # Calculate causal stats up to t (inclusive)
+            if normalization == 'standard':
+                means = np.mean(x_seq[:, columns_to_normalize], axis=0)#.mean()
+                stds = np.std(x_seq[:, columns_to_normalize], axis=0)#.std().replace(0, 1e-8)
+                
+                means = np.expand_dims(means, axis=0)
+                stds = np.expand_dims(stds, axis=0)
+                stds[stds == 0] = 1#e-8
+                # Normalize past values (including target at time t)
+                normalized = x_seq
+                normalized[:, columns_to_normalize] = (x_seq[:, columns_to_normalize] - np.tile(means, [x_seq.shape[0], 1])) / np.tile(stds, [x_seq.shape[0], 1])
+                normalized = np.nan_to_num(normalized, nan=0)
+            elif normalization == 'uniform':
+                mins = np.min(x_seq[:, columns_to_normalize], axis=0)#.mean()
+                maxs = np.max(x_seq[:, columns_to_normalize], axis=0)#.std().replace(0, 1e-8)
+                
+                mins = np.expand_dims(mins, axis=0)
+                maxs = np.expand_dims(maxs, axis=0)
+                # Normalize past values (including target at time t)
+                normalized = x_seq
+                normalized[:, columns_to_normalize] = (x_seq[:, columns_to_normalize] - np.tile(mins, [x_seq.shape[0], 1])) / np.tile(maxs-mins, [x_seq.shape[0], 1])
+                # normalized.fillna(0, inplace=True)  # Fill NaN values with 0 after normalization
+                normalized = np.nan_to_num(normalized, nan=0)
+            elif normalization == 'relative':
+                normalized = normalise_selected_columns(x_seq, columns_to_normalize, single_window=True)
+                normalized = np.nan_to_num(normalized, nan=0)
+            elif normalization == 'None':
+                normalized = x_seq
+                
+            pred = model(torch.unsqueeze(torch.tensor(normalized).float(), dim=0))
 
-            pred_actual_list = []
-            gt_actual_list = []
-            # plotted = False
-            x_actual_list = []
-            for i in range(5):#len(y) ):
-                if preprocess == 'decomposed':
-                    target_index1 = common_cols.index('trend')
-                    target_index2 = common_cols.index('residual')
-                    target_index3 = common_cols.index('seasonal')
-                    target_indexes = [target_index1, target_index2, target_index3]
-                else:
-                    target_indexes = [target_index]
-                x_seq = x[i].copy()
-                # Calculate causal stats up to t (inclusive)
-                if normalization == 'standard':
-                    means = np.mean(x_seq[:, columns_to_normalize], axis=0)#.mean()
-                    stds = np.std(x_seq[:, columns_to_normalize], axis=0)#.std().replace(0, 1e-8)
-                    
-                    means = np.expand_dims(means, axis=0)
-                    stds = np.expand_dims(stds, axis=0)
-                    stds[stds == 0] = 1e-8
-                    # Normalize past values (including target at time t)
-                    normalized = x_seq
-                    normalized[:, columns_to_normalize] = (x_seq[:, columns_to_normalize] - np.tile(means, [x_seq.shape[0], 1])) / np.tile(stds, [x_seq.shape[0], 1])
-                    # normalized.fillna(0, inplace=True)  # Fill NaN values with 0 after normalization
-                    normalized = np.nan_to_num(normalized, nan=0)
-                elif normalization == 'uniform':
-                    mins = np.min(x_seq[:, columns_to_normalize], axis=0)#.mean()
-                    maxs = np.max(x_seq[:, columns_to_normalize], axis=0)#.std().replace(0, 1e-8)
-                    
-                    mins = np.expand_dims(mins, axis=0)
-                    maxs = np.expand_dims(maxs, axis=0)
-                    # mins[mins == 0] = 1e-8
-                    # Normalize past values (including target at time t)
-                    normalized = x_seq
-                    normalized[:, columns_to_normalize] = (x_seq[:, columns_to_normalize] - np.tile(mins, [x_seq.shape[0], 1])) / np.tile(maxs-mins, [x_seq.shape[0], 1])
-                    # normalized.fillna(0, inplace=True)  # Fill NaN values with 0 after normalization
-                    normalized = np.nan_to_num(normalized, nan=0)
-                elif normalization == 'relative':
-                    normalized = normalise_selected_columns(x_seq, columns_to_normalize, single_window=True)
-                    normalized = np.nan_to_num(normalized, nan=0)
-                elif normalization == 'None':
-                    normalized = x_seq
-                    
-                with torch.no_grad():
-                    if normalization == 'None':
-                        pred = model(torch.unsqueeze(torch.tensor(x_seq).float(), dim=0))
-                    else:
-                        pred = model(torch.unsqueeze(torch.tensor(normalized).float(), dim=0))
+            pred = pred.squeeze()
 
-                    pred = pred.squeeze()
+            if len(pred.shape) == 1:
+                pred = torch.unsqueeze(pred, dim=1) 
 
-                    if len(pred.shape) == 1:
-                        pred = torch.unsqueeze(pred, dim=1) 
+            t = pred.cpu().numpy()
+            if t.shape[1] > 1:
+                t = np.sum(t, axis=1)  # Sum across the last dimension if multiple targets           
+            if normalization == 'standard':
+                # De-normalize the predictions
+                pred_actual = t * np.sum(stds[0, target_indexes], axis = 1) + np.sum(means[0, target_indexes], axis = 1)
+            elif normalization == 'uniform':
+                pred_actual = t * (np.sum(maxs[0, target_indexes], axis = 1) - np.sum(mins[0, target_indexes], axis = 1)) + np.sum(mins[0, target_indexes], axis = 1)
+            elif normalization == 'relative':
+                pred_actual = t * np.sum(x_seq[-1, target_index], axis = 1) #+ 1
+            elif normalization == 'None':
+                pred_actual = t
 
-                    y_pred_total = []
-                    x_batch_total = []
-                    y_gt_total = []
-                    t = pred.cpu().numpy()
+            # Combine predictions
+            y_pred_total = pred_actual# np.sum(pred_actual, axis=1)#pred_actual_trend + pred_actual_seasonal + pred_actual_resid
+            if len(y_pred_total.shape) == 1:
+                y_pred_total = np.expand_dims(y_pred_total, axis=1)
+            # target_index = common_cols.index('OT')
+            x_batch_total =  x[i].copy() 
+            y_gt_total = np.sum(y[i,:,:], axis=1)#y[i,:,0] + y[i,:,1] + y[i,:, 2]
+            if len(y_gt_total.shape) == 1:
+                y_gt_total = np.expand_dims(y_gt_total, axis=1)
 
-                    if normalization == 'standard':
-                        # De-normalize the predictions
-                        pred_actual = t * stds[0, target_indexes] + means[0, target_indexes]
-                    elif normalization == 'uniform':
-                        pred_actual = t * (maxs[0, target_indexes] - mins[0, target_indexes]) + mins[0, target_indexes]
-                    elif normalization == 'relative':
-                        pred_actual = t * x_seq[-1, target_index] #+ 1
-                    elif normalization == 'None':
-                        pred_actual = t
-
-                    # Combine predictions
-                    y_pred_total = np.sum(pred_actual, axis=1)#pred_actual_trend + pred_actual_seasonal + pred_actual_resid
-                    if len(y_pred_total.shape) == 1:
-                        y_pred_total = np.expand_dims(y_pred_total, axis=1)
-                    # target_index = common_cols.index('OT')
-                    x_batch_total =  x[i].copy() 
-                    y_gt_total = np.sum(y[i,:,:], axis=1)#y[i,:,0] + y[i,:,1] + y[i,:, 2]
-                    if len(y_gt_total.shape) == 1:
-                        y_gt_total = np.expand_dims(y_gt_total, axis=1)
-                    pred_actual_list.append(y_pred_total)
-                    gt_actual_list.append(y_gt_total)
-                    x_actual_list.append(x_batch_total)
-                    
-            for i in range(5):#min(num_samples, len(pred_actual_list))):
-                if i > num_samples:
-                    # plotted = True
-                    return
-                else:
-                    # target_index = common_cols.index('OT')
-                    # x_hist = x_batch_total[:, target_index]
-                    x_hist = x_actual_list[i][:, target_index]#.cpu().numpy()
-                    if len(target_indexes[0]) > 1:
-                        x_hist = np.sum(x_hist, axis=1)
-                    y_true = np.array(gt_actual_list[i])#.item()
-                    if normalization == 'relative':
-                        y_hat = np.array(pred_actual_list[i])#(np.array(pred_actual_list[i])+1)* x_actual_list[i][-2, target_index]#
-                        # y_true = np.array(gt_actual_list[i]/x_actual_list[i][-2, target_index])
-                        # x_hist = x_hist / x_actual_list[i][-2, target_index]
+            x_hist = x_batch_total[:, target_index]#.cpu().numpy()
+            if x_hist.shape[1] > 1:
+                x_hist = np.sum(x_hist, axis=1)
+            y_true = np.array(y_gt_total)#.item()
                         
-                    else:
-                        y_hat = np.array(pred_actual_list[i])#.item()
+            # else:
+            y_hat = np.array(y_pred_total)#.item()
 
-                    # Plot
-                    plt.figure(figsize=(6, 3))
-                    plt.plot(range(len(x_hist)), x_hist, label='History (Target Feature)', marker='o')
-                    plt.plot(range(len(x_hist), len(x_hist)+pred_len) , y_true, '-go', label='True Next', markersize=8)
-                    plt.plot(range(len(x_hist), len(x_hist)+pred_len) , y_hat, '-rx', label='Predicted Next', markersize=8)
-                    plt.title(f"Sample {i}")
-                    plt.xlabel("Time Step")
-                    plt.ylabel("Target Value")
-                    plt.legend()
-                    plt.grid(True)
-                    plt.tight_layout()
+            # Plot
+            plt.figure(figsize=(6, 3))
+            plt.plot(range(len(x_hist)), x_hist, label='History (Target Feature)', marker='o')
+            plt.plot(range(len(x_hist), len(x_hist)+pred_len) , y_true, '-go', label='True Next', markersize=8)
+            plt.plot(range(len(x_hist), len(x_hist)+pred_len) , y_hat, '-rx', label='Predicted Next', markersize=8)
+            plt.title(f"Sample {i}")
+            plt.xlabel("Time Step")
+            plt.ylabel("Target Value")
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig(f"test_sample_prediction{i}.png")
 
 
 
@@ -206,7 +177,7 @@ def evaluate_model(model,
                 inputs_norm = inputs.float()
                 means = inputs.mean(dim=1, keepdim=True)
                 stds = inputs.std(dim=1, keepdim=True)#.replace(0, 1e-8)
-                stds[stds == 0] = 1e-8  # Avoid division by zero
+                stds[stds == 0] = 1#e-8  # Avoid division by zero
                 inputs_norm = (inputs_norm - means) / stds
             elif normalization == 'uniform':
                 inputs_norm = inputs.float()

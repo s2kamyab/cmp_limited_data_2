@@ -138,6 +138,8 @@ def train_model(model,
     for epoch in range(epochs):
         model.train()
         total_loss = 0
+        sample_num_tr = 0
+        sample_num_tst = 0
         for x, y in train_loader_actual:
             x, y = x.to(device), y.to(device)
             # --- Normalize input ---
@@ -148,35 +150,51 @@ def train_model(model,
                 x_norm = (x - x_mean) / x_std
 
                 # --- Normalize target to same scale (optional but typical) ---
-                y_norm = (y - x_mean[:, :, target_index]) / x_std[:, :, target_index]  # Assuming y relates to 1st feature
+                # y_norm = (y - x_mean[:, :, target_index]) / x_std[:, :, target_index]  # Assuming y relates to 1st feature
             elif normalization == 'minmax':
                 x_min = x.min(dim=1, keepdim=True)[0]
                 x_min = torch.tile(torch.unsqueeze(x_min[:,  target_index], dim=1), [1,y.shape[1],1] )
                 x_max = x.max(dim=1, keepdim=True)[0]
                 x_max = torch.tile(torch.unsqueeze(x_max[:,  target_index], dim=1), [1,y.shape[1],1] )
                 x_norm = (x - x_min) / (x_max - x_min + 1e-8)
-                y_norm = (y - x_min) / (x_max - x_min + 1e-8)
+                # y_norm = (y - x_min) / (x_max - x_min + 1e-8)
             elif normalization == 'relative':
                 ref = x[:, -1, :]  # last time step
                 ref[ref == 0] = 1e-8
                 x_norm = x / torch.tile(torch.unsqueeze(ref,dim=1),[1,x.shape[1],1])  # assuming x relates to 1st feature
-                y_norm = y / torch.tile(torch.unsqueeze(ref[:,  target_index], dim=1), [1,y.shape[1],1] ) # assuming y relates to 1st feature
+                # y_norm = y / torch.tile(torch.unsqueeze(ref[:,  target_index], dim=1), [1,y.shape[1],1] ) # assuming y relates to 1st feature
 
             # --- Model forward ---
             output_norm = model(x_norm)
 
-            if normalization == 'standard':
-                output = output_norm * x_std[:, :, target_index] + x_mean[:, :, target_index]
-            elif normalization == 'minmax':
-                output = output_norm * (x_max[:, :, target_index] - x_min[:, :, target_index]) + x_min[:, :, target_index]  
-            elif normalization == 'relative':
-                output = output_norm * torch.tile(torch.unsqueeze(ref[:,  target_index], dim=1), [1,y.shape[1],1] )
-            # x, y = x.to(device), y.to(device)
-            # # 4. Weighted MSE Loss
-            if len(output.shape) == 3:
-                if output.shape[2] == 3: # preprocess == decompose
-                    output = output.sum(dim=2)  # sum over the last dimension
+
+            if len(output_norm.shape) == 3:
+                if output_norm.shape[2] == 2: # preprocess == decompose
+                    output_norm = output_norm.sum(dim=2)  # sum over the last dimension
                     y = y.sum(dim=2)  # sum over the last dimension
+
+            if normalization == 'standard':
+                output = output_norm * torch.sum(x_std[:, :, target_index], dim = 2) + torch.sum(x_mean[:, :, target_index] , dim = 2)
+            elif normalization == 'minmax':
+                output = output_norm * (torch.sum(x_max[:, :, target_index], dim = 2) - torch.sum(x_min[:, :, target_index], dim = 2)) + torch.sum(x_min[:, :, target_index], dim = 2)  
+            elif normalization == 'relative':
+                tt = torch.sum(ref[:,  target_index], dim=1)
+                tt = torch.unsqueeze(tt, dim=1)
+                output = output_norm * tt# torch.tile(torch.unsqueeze(tt, dim=1), [1,y.shape[1],1] )
+
+
+            # if normalization == 'standard':
+            #     output = output_norm * x_std[:, :, target_index] + x_mean[:, :, target_index]
+            # elif normalization == 'minmax':
+            #     output = output_norm * (x_max[:, :, target_index] - x_min[:, :, target_index]) + x_min[:, :, target_index]  
+            # elif normalization == 'relative':
+            #     output = output_norm * torch.tile(torch.unsqueeze(ref[:,  target_index], dim=1), [1,y.shape[1],1] )
+            # # x, y = x.to(device), y.to(device)
+            # # # 4. Weighted MSE Loss
+            # if len(output.shape) == 3:
+            #     if output.shape[2] == 2: # preprocess == decompose
+            #         output = output.sum(dim=2)  # sum over the last dimension
+            #         y = y.sum(dim=2)  # sum over the last dimension
             loss = criterion(torch.squeeze(output), torch.squeeze(y))#torch.mean(weights * (model_residual(x) - y)**2)
             # Compute MSE per element, no reduction
             # y_pred = torch.squeeze(output)
@@ -188,8 +206,9 @@ def train_model(model,
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
+            sample_num_tr += 1
             optimizer.zero_grad() 
-        train_losses.append(total_loss / len(train_loader_actual))
+        train_losses.append(total_loss / sample_num_tr)#len(train_loader_actual))
         model.eval()
         val_loss = 0
         with torch.no_grad():
@@ -218,16 +237,37 @@ def train_model(model,
                     y_norm = y / torch.tile(torch.unsqueeze(ref[:,  target_index], dim=1), [1,y.shape[1],1] ) # assuming y relates to 1st feature
 
                 # --- Model forward ---
+                
                 output_norm = model(x_norm)
 
-                if normalization == 'standard':
-                    output = output_norm * x_std[:, :, target_index] + x_mean[:, :, target_index]
-                elif normalization == 'minmax':
-                    output = output_norm * (x_max[:, :, target_index] - x_min[:, :, target_index]) + x_min[:, :, target_index]  
-                elif normalization == 'relative':
-                    output = output_norm * torch.tile(torch.unsqueeze(ref[:,  target_index], dim=1), [1,y.shape[1],1] )
                 # x, y = x.to(device), y.to(device)
                 # # 4. Weighted MSE Loss
+                if len(output_norm.shape) == 3:
+                    if output_norm.shape[2] == 2: # preprocess == decompose
+                        output_norm = output_norm.sum(dim=2)  # sum over the last dimension
+                        y = y.sum(dim=2)  # sum over the last dimension
+
+                if normalization == 'standard':
+                    output = output_norm * torch.sum(x_std[:, :, target_index], dim = 2) + torch.sum(x_mean[:, :, target_index] , dim = 2)
+                elif normalization == 'minmax':
+                    output = output_norm * (torch.sum(x_max[:, :, target_index], dim = 2) - torch.sum(x_min[:, :, target_index], dim = 2)) + torch.sum(x_min[:, :, target_index], dim = 2)  
+                elif normalization == 'relative':
+                    output = output_norm * torch.tile(torch.unsqueeze(torch.sum(ref[:,  target_index], dim=1), dim=1), [1,y.shape[1]] )
+
+
+                # if normalization == 'standard':
+                #     output = output_norm * x_std[:, :, target_index] + x_mean[:, :, target_index]
+                # elif normalization == 'minmax':
+                #     output = output_norm * (x_max[:, :, target_index] - x_min[:, :, target_index]) + x_min[:, :, target_index]  
+                # elif normalization == 'relative':
+                #     output = output_norm * torch.tile(torch.unsqueeze(ref[:,  target_index], dim=1), [1,y.shape[1],1] )
+                # # x, y = x.to(device), y.to(device)
+                # # # 4. Weighted MSE Loss
+                # if len(output_norm.shape) == 3:
+                #     if output.shape[2] == 2: # preprocess == decompose
+                #         output = output.sum(dim=2)  # sum over the last dimension
+                #         y = y.sum(dim=2)  # sum over the last dimension
+
                 val_loss += criterion(torch.squeeze(output), torch.squeeze(y))#torch.mean(weights * (model_residual(x) - y)**2)
 
                 # x, y = x.to(device), y.to(device)    
@@ -236,13 +276,15 @@ def train_model(model,
                 # if val_loss < best_val_loss:
                 #     best_val_loss = val_loss
                 #     save_checkpoint(model, optimizer, epoch, train_losses, path=chkpnt_path)
-        
-        val_losses.append(val_loss / len(test_loader_actual))
+            sample_num_tst += 1
+            val_losses.append(val_loss / sample_num_tst)  # len(test_loader_actual))
+            
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             save_checkpoint(model, optimizer, epoch, train_losses, val_losses, path=chkpnt_path)
+        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {total_loss/sample_num_tr:.4f} | Test Loss: {val_loss/sample_num_tst:.4f}")
 
-        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {total_loss/len(train_loader_actual):.4f} | Test Loss: {val_loss/len(test_loader_actual):.4f}")
+        # print(f"Epoch {epoch+1}/{epochs} | Train Loss: {total_loss/len(train_loader_actual):.4f} | Test Loss: {val_loss/len(test_loader_actual):.4f}")
         early_stopping(val_loss, model)
         if early_stopping.early_stop:
             break

@@ -146,7 +146,7 @@ def preprocess(preprocess, train1, test1, target_index):
         trend1 = components['trend']
         seasonal1 = components['seasonal']
         residual1 = components['resid']
-        train1['residual'] = residual1
+        # train1['residual'] = residual1
         train1['trend'] = trend1
         train1['seasonal'] = seasonal1
 
@@ -156,10 +156,10 @@ def preprocess(preprocess, train1, test1, target_index):
         trend1 = components['trend']
         seasonal1 = components['seasonal']
         residual1 = components['resid']
-        test1['residual'] = residual1
+        # test1['residual'] = residual1
         test1['trend'] = trend1
         test1['seasonal'] = seasonal1
-        target_index = [train1.columns.get_loc('trend'), train1.columns.get_loc('seasonal'), train1.columns.get_loc('residual')]
+        target_index = [train1.columns.get_loc('trend'), train1.columns.get_loc('seasonal')]#, train1.columns.get_loc('residual')]
 
     elif preprocess == 'fft':
         fft_vals = np.fft.fft(train1.iloc[:,target_index])
@@ -371,7 +371,7 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
     if preprocess_type == 'decompose':
-        output_dim = 3  # trend, seasonal, residual
+        output_dim = 2  # trend, seasonal, residual
     else:
         output_dim = 1
     train1, test1, target_index = preprocess(preprocess_type, train1, test1, target_index)   
@@ -381,9 +381,9 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
     test_dataset, input_dim, test_dataset_actual = create_seqs_normalized([test1],test1.columns, seq_len, pred_len, normalization, columns_to_normalize, target_index)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    train_loader_actual = DataLoader(train_dataset_actual, batch_size=batch_size, shuffle=True)
     test_loader_actual = DataLoader(test_dataset_actual, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+    train_loader_actual = DataLoader(train_dataset_actual, batch_size=batch_size, shuffle=True)
     # if eda:
     #     plot_train_test_target_distributions(train_loader, test_loader, num_outputs=len(target_index))
     return train_loader, test_loader, train_loader_actual, test_loader_actual, input_dim, output_dim, train1.columns.tolist(), target_index, columns_to_normalize

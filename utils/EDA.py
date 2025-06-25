@@ -9,7 +9,7 @@ from scipy.stats import wasserstein_distance
 from scipy.stats import pearsonr
 from scipy.stats import ks_2samp
 from scipy.special import rel_entr
-def plot_train_test_target_distributions(train_loader, test_loader,data_name, num_outputs=3):
+def plot_train_test_target_distributions(train_loader, test_loader,data_name, num_outputs=2):
     # Step 1: Extract targets from DataLoaders
     def extract_targets(loader):
         all_targets = []
@@ -67,8 +67,8 @@ def plot_train_test_target_distributions(train_loader, test_loader,data_name, nu
             c, _ = pearsonr(tr_counts[i], tst_counts[i])
             p_corr.append(c)
 
-    if train_targets.shape[1] == 3:
-        comps = ['trend', 'seasonal', 'residual']
+    if train_targets.shape[1] > 1:
+        comps = ['trend', 'seasonal']#, 'residual']
     elif train_targets.shape[1] == 1:
         comps = ['target']
 
@@ -144,7 +144,7 @@ def compute_lagged_correlation(sentiment_array, target_array, max_lag=10):
 
 def Explore_data(eda, train_loader, test_loader, preprocess_type, features, data_name, use_sentiment):
     if preprocess_type == 'decompose':
-        num_outputs = 3
+        num_outputs = 2
     else:
         num_outputs = 1
     print(f"Number of outputs: {num_outputs}")

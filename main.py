@@ -13,7 +13,7 @@ def main():
     dataset_name = 'soshianest_530501'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 'fin_aal', 'fin_aapl', 'fin_abbv', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt'
     # 'fin_abbv', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt'
     normalization = 'standard'#'relative'#'uniform'# 'standard' # 'None'
-    pred_len = 2
+    pred_len = 3
     seq_len = 16
     batch_size = 16
     preprocess_type ='decompose'#'fft'#'decompose'#'None'#'decompose'# 'None'#'decompose'
@@ -23,7 +23,7 @@ def main():
     lr = 0.00001
     phase = 'train'  # 'train' or 'test
     use_sentiment = True # Whether to use sentiment data or not
-    criterion = 'smape' # 'smape', 'mse', 'mae', 'mape' # Loss function to use, can be 'mse', 'mae', 'smape', or 'mape'
+    criterion = 'mse' # 'smape', 'mse', 'mae', 'mape' # Loss function to use, can be 'mse', 'mae', 'smape', or 'mape'
     print(f"Running with dataset: {dataset_name},\n model: {model_type},\n preprocess: {preprocess_type}, \n normalization: {normalization},\n sequence length: {seq_len}, \n prediction length: {pred_len},\n batch size: {batch_size}, \n learning rate: {lr},\n phase: {phase}")
     ####################################################################################
     # Load dataset
@@ -46,7 +46,7 @@ def main():
                                                     optimizer, 
                                                     chkpnt_path,
                                                     target_index,
-                                                    normalization='relative', 
+                                                    normalization=normalization, 
                                                     epochs=epoch, 
                                                     device='cpu', 
                                                     load_checkpoint=False)
