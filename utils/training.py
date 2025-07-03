@@ -150,19 +150,19 @@ def train_model(model,
                 x_norm = (x - x_mean) / x_std
 
                 # --- Normalize target to same scale (optional but typical) ---
-                # y_norm = (y - x_mean[:, :, target_index]) / x_std[:, :, target_index]  # Assuming y relates to 1st feature
+                y_norm = (y - x_mean[:, :, target_index]) / x_std[:, :, target_index]  # Assuming y relates to 1st feature
             elif normalization == 'minmax':
                 x_min = x.min(dim=1, keepdim=True)[0]
                 x_min = torch.tile(torch.unsqueeze(x_min[:,  target_index], dim=1), [1,y.shape[1],1] )
                 x_max = x.max(dim=1, keepdim=True)[0]
                 x_max = torch.tile(torch.unsqueeze(x_max[:,  target_index], dim=1), [1,y.shape[1],1] )
                 x_norm = (x - x_min) / (x_max - x_min + 1e-8)
-                # y_norm = (y - x_min) / (x_max - x_min + 1e-8)
+                y_norm = (y - x_min) / (x_max - x_min + 1e-8)
             elif normalization == 'relative':
                 ref = x[:, -1, :]  # last time step
                 ref[ref == 0] = 1e-8
                 x_norm = x / torch.tile(torch.unsqueeze(ref,dim=1),[1,x.shape[1],1])  # assuming x relates to 1st feature
-                # y_norm = y / torch.tile(torch.unsqueeze(ref[:,  target_index], dim=1), [1,y.shape[1],1] ) # assuming y relates to 1st feature
+                y_norm = y / torch.tile(torch.unsqueeze(ref[:,  target_index], dim=1), [1,y.shape[1],1] ) # assuming y relates to 1st feature
 
             # --- Model forward ---
             output_norm = model(x_norm)
@@ -171,15 +171,49 @@ def train_model(model,
             if len(output_norm.shape) == 3:
                 if output_norm.shape[2] == 2: # preprocess == decompose
                     output_norm = output_norm.sum(dim=2)  # sum over the last dimension
-                    y = y.sum(dim=2)  # sum over the last dimension
+                    y_norm = y_norm.sum(dim=2)  # sum over the last dimension
 
+            if len(output_norm.shape) == 2:
+                output_norm = torch.unsqueeze(output_norm, dim=2)
+            if len(y_norm.shape) == 2:
+                y_norm = torch.unsqueeze(y_norm, dim=2)
+              
             if normalization == 'standard':
-                output = output_norm * torch.sum(x_std[:, :, target_index], dim = 2) + torch.sum(x_mean[:, :, target_index] , dim = 2)
-            elif normalization == 'minmax':
-                output = output_norm * (torch.sum(x_max[:, :, target_index], dim = 2) - torch.sum(x_min[:, :, target_index], dim = 2)) + torch.sum(x_min[:, :, target_index], dim = 2)  
-            elif normalization == 'relative':
-                tt = torch.sum(ref[:,  target_index], dim=1)
+                if len(target_index)>1:
+                    tt = torch.unsqueeze(x_std[:, :, target_index], dim=2)
+                    tt2 = torch.unsqueeze(x_mean[:, :, target_index], dim=2)
+                else:
+                    tt = x_std[:, :, target_index]
+                    tt2 = x_mean[:, :, target_index]
+                tt = torch.sum(tt, dim = 2)
                 tt = torch.unsqueeze(tt, dim=1)
+                tt2 = torch.sum(tt2, dim = 2)
+                tt2 = torch.unsqueeze(tt2, dim=1)
+                output = output_norm * torch.tile(tt, [1,y.shape[1],1]) + torch.tile(tt2, [1,y.shape[1],1])
+            elif normalization == 'minmax':
+                if len(target_index)>1:
+                    tt = torch.unsqueeze(x_min[:, :, target_index], dim=2)
+                    tt2 = torch.unsqueeze(x_max[:, :, target_index], dim=2)
+                else:
+                    tt = x_min[:, :, target_index]
+                    tt2 = x_max[:, :, target_index]
+                tt = torch.sum(x_max[:, :, target_index], dim = 2)
+                tt = torch.unsqueeze(tt, dim=1)
+                tt2 = torch.sum(x_min[:, :, target_index], dim = 2)
+                tt2 = torch.unsqueeze(tt2, dim=1)
+                output = output_norm * (torch.tile(tt, [1,y.shape[1],1]) - torch.tile(tt2, [1,y.shape[1],1])) + torch.tile(tt2, [1,y.shape[1],1])  
+            elif normalization == 'relative':
+                # if len(target_index.shape)>1:
+                #     tt = torch.unsqueeze(x_std[:, :, target_index], dim=2)
+                #     tt2 = torch.unsqueeze(x_mean[:, :, target_index], dim=2)
+                # else:
+                #     tt = x_std[:, :, target_index]
+                #     tt2 = x_mean[:, :, target_index]
+                tt = torch.sum(ref[:,  target_index], dim=1)
+                if len(tt.shape) == 1:
+                    tt = torch.unsqueeze(tt, dim=1)
+                tt = torch.unsqueeze(tt, dim=1)
+                tt = torch.tile(tt, [1,y.shape[1],1])
                 output = output_norm * tt# torch.tile(torch.unsqueeze(tt, dim=1), [1,y.shape[1],1] )
 
 
@@ -195,7 +229,9 @@ def train_model(model,
             #     if output.shape[2] == 2: # preprocess == decompose
             #         output = output.sum(dim=2)  # sum over the last dimension
             #         y = y.sum(dim=2)  # sum over the last dimension
-            loss = criterion(torch.squeeze(output), torch.squeeze(y))#torch.mean(weights * (model_residual(x) - y)**2)
+            # loss = criterion(torch.squeeze(output), torch.squeeze(y))#torch.mean(weights * (model_residual(x) - y)**2)
+            loss = criterion(torch.squeeze(output_norm), torch.squeeze(y_norm))#torch.mean(weights * (model_residual(x) - y)**2)
+
             # Compute MSE per element, no reduction
             # y_pred = torch.squeeze(output)
             # y_true = torch.squeeze(y)
@@ -245,14 +281,31 @@ def train_model(model,
                 if len(output_norm.shape) == 3:
                     if output_norm.shape[2] == 2: # preprocess == decompose
                         output_norm = output_norm.sum(dim=2)  # sum over the last dimension
-                        y = y.sum(dim=2)  # sum over the last dimension
+                        output_norm = torch.unsqueeze(output_norm, dim=2)
+                        y_norm = y_norm.sum(dim=2)  # sum over the last dimension
+                        y_norm = torch.unsqueeze(y_norm, dim=2)
+
 
                 if normalization == 'standard':
-                    output = output_norm * torch.sum(x_std[:, :, target_index], dim = 2) + torch.sum(x_mean[:, :, target_index] , dim = 2)
+                    tt = torch.sum(x_std[:, :, target_index], dim = 2)
+                    tt = torch.tile(torch.unsqueeze(tt, dim=1), [1, y.shape[1], 1])
+                    tt2 = torch.sum(x_std[:, :, target_index], dim = 2)
+                    tt2 = torch.tile(torch.unsqueeze(tt2, dim=1), [1, y.shape[1], 1])
+                    output = output_norm * tt + tt2
                 elif normalization == 'minmax':
-                    output = output_norm * (torch.sum(x_max[:, :, target_index], dim = 2) - torch.sum(x_min[:, :, target_index], dim = 2)) + torch.sum(x_min[:, :, target_index], dim = 2)  
+                    tt = torch.sum(x_max[:, :, target_index], dim = 2)
+                    tt = torch.tile(torch.unsqueeze(tt, dim=1), [1, y.shape[1], 1])
+                    tt2 = torch.sum(x_min[:, :, target_index], dim = 2)
+                    tt2 = torch.tile(torch.unsqueeze(tt2, dim=1), [1, y.shape[1], 1])
+                    output = output_norm * (tt - tt2) + tt2  
                 elif normalization == 'relative':
-                    output = output_norm * torch.tile(torch.unsqueeze(torch.sum(ref[:,  target_index], dim=1), dim=1), [1,y.shape[1]] )
+                    tt = torch.sum(ref[:,  target_index], dim=1)
+                    if len(tt.shape) == 1:
+                        tt = torch.unsqueeze(tt, dim=1)
+
+                    tt = torch.unsqueeze(tt, dim=1)
+                    tt = torch.tile(tt, [1, y.shape[1], 1])
+                    output = output_norm * tt#torch.tile(torch.unsqueeze(torch.sum(ref[:,  target_index], dim=1), dim=1), [1,y.shape[1]] )
 
 
                 # if normalization == 'standard':
@@ -268,7 +321,7 @@ def train_model(model,
                 #         output = output.sum(dim=2)  # sum over the last dimension
                 #         y = y.sum(dim=2)  # sum over the last dimension
 
-                val_loss += criterion(torch.squeeze(output), torch.squeeze(y))#torch.mean(weights * (model_residual(x) - y)**2)
+                val_loss += criterion(torch.squeeze(output_norm), torch.squeeze(y_norm))#torch.mean(weights * (model_residual(x) - y)**2)
 
                 # x, y = x.to(device), y.to(device)    
                 # val_loss += criterion(torch.squeeze(model(x)), torch.squeeze(y)).item()
@@ -276,7 +329,7 @@ def train_model(model,
                 # if val_loss < best_val_loss:
                 #     best_val_loss = val_loss
                 #     save_checkpoint(model, optimizer, epoch, train_losses, path=chkpnt_path)
-            sample_num_tst += 1
+                sample_num_tst += 1
             val_losses.append(val_loss / sample_num_tst)  # len(test_loader_actual))
             
         if val_loss < best_val_loss:

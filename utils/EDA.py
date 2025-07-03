@@ -15,7 +15,10 @@ def plot_train_test_target_distributions(train_loader, test_loader,data_name, nu
         all_targets = []
         for _, y in loader:
             all_targets.append(y[0])
-        return torch.cat(all_targets, dim=0).cpu().numpy()  # shape: (N, num_outputs)
+        t = torch.cat(all_targets, dim=0).cpu().numpy()
+        if len(t.shape) == 1:
+            t = t.reshape(-1, 1)
+        return   t# shape: (N, num_outputs)
 
     train_targets = extract_targets(train_loader)
     test_targets = extract_targets(test_loader)
@@ -72,19 +75,19 @@ def plot_train_test_target_distributions(train_loader, test_loader,data_name, nu
     elif train_targets.shape[1] == 1:
         comps = ['target']
 
-    # Step 2: Plot for each output dimension
-    for i in range(num_outputs):
-        plt.figure(figsize=(6, 4))
-        sns.kdeplot(train_targets[:, i], label='Train', fill=True)
-        sns.kdeplot(test_targets[:, i], label='Test', fill=True)
-        plt.title(f"Distribution of {comps[i]} for {data_name} Data")
-        plt.xlabel("Value")
-        plt.ylabel("Density")
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(f"training_results\\{comps[i]}_{data_name}_distribution.png")
-        plt.show()
+    # # Step 2: Plot for each output dimension
+    # for i in range(num_outputs):
+    #     plt.figure(figsize=(6, 4))
+    #     sns.kdeplot(train_targets[:, i], label='Train', fill=True)
+    #     sns.kdeplot(test_targets[:, i], label='Test', fill=True)
+    #     plt.title(f"Distribution of {comps[i]} for {data_name} Data")
+    #     plt.xlabel("Value")
+    #     plt.ylabel("Density")
+    #     plt.legend()
+    #     plt.grid(True)
+    #     plt.tight_layout()
+    #     plt.savefig(f"training_results\\{comps[i]}_{data_name}_distribution.png")
+    #     plt.show()
     
     return ks_p_value, p_corr, js_similarity
 
@@ -164,16 +167,16 @@ def Explore_data(eda, train_loader, test_loader, preprocess_type, features, data
             print(f"min KS Test p-values: {np.min(np.array(ks_p_value))}")
             print(f"min Pearson Correlation Coefficients: {np.min(np.array(p_corr))}")
             print(f"min Jensen-Shannon Divergences: {np.min(np.array(js_similarity))}")
-    if use_sentiment:
-        sentiment_idx = -1  # change this to your sentiment feature index
-        sentiment_array, target_array = extract_sentiment_and_target(train_loader, sentiment_idx)
-        correlations = compute_lagged_correlation(sentiment_array, target_array, max_lag=20)
-        correlations.plot(kind='bar', title='Correlation of Lagged Sentiment with Target')
-        plt.xlabel('Lag')
-        plt.ylabel('Correlation')
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
+    # if use_sentiment:
+    #     sentiment_idx = -1  # change this to your sentiment feature index
+    #     sentiment_array, target_array = extract_sentiment_and_target(train_loader, sentiment_idx)
+    #     correlations = compute_lagged_correlation(sentiment_array, target_array, max_lag=20)
+    #     correlations.plot(kind='bar', title='Correlation of Lagged Sentiment with Target')
+    #     plt.xlabel('Lag')
+    #     plt.ylabel('Correlation')
+    #     plt.grid(True)
+    #     plt.tight_layout()
+    #     plt.show()
             
     # if corr:
         # print("Calculating and plotting correlation matrix...")

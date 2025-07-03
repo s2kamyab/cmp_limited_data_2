@@ -57,7 +57,7 @@ def plot_sample_predictions(model,
                 
                 means = np.expand_dims(means, axis=0)
                 stds = np.expand_dims(stds, axis=0)
-                stds[stds == 0] = 1#e-8
+                stds[stds == 0] = 1e-8
                 # Normalize past values (including target at time t)
                 normalized = x_seq
                 normalized[:, columns_to_normalize] = (x_seq[:, columns_to_normalize] - np.tile(means, [x_seq.shape[0], 1])) / np.tile(stds, [x_seq.shape[0], 1])
@@ -93,9 +93,17 @@ def plot_sample_predictions(model,
                 # De-normalize the predictions
                 pred_actual = t * np.sum(stds[0, target_indexes], axis = 1) + np.sum(means[0, target_indexes], axis = 1)
             elif normalization == 'uniform':
-                pred_actual = t * (np.sum(maxs[0, target_indexes], axis = 1) - np.sum(mins[0, target_indexes], axis = 1)) + np.sum(mins[0, target_indexes], axis = 1)
+                if len(target_indexes) > 1:
+                    pred_actual = t * np.sum(maxs[0, target_indexes] - mins[0, target_indexes], axis = 1) + np.sum(mins[0, target_indexes], axis = 1)   
+                else:
+                    pred_actual = t * (maxs[0, target_index] - mins[0, target_index]) + mins[0, target_index] 
+                # pred_actual = t * (tt - np.sum(mins[0, target_indexes], axis = 1)) + np.sum(mins[0, target_indexes], axis = 1)
             elif normalization == 'relative':
-                pred_actual = t * np.sum(x_seq[-1, target_index], axis = 1) #+ 1
+                if len(target_indexes) > 1:
+                    pred_actual = t * np.sum(x_seq[-1, target_indexes], axis = 1)
+                else:
+                    pred_actual = t * x_seq[-1, target_index]
+                
             elif normalization == 'None':
                 pred_actual = t
 
@@ -154,7 +162,8 @@ def evaluate_model(model,
                    normalization,
                    column_to_normalize, 
                    target_index, 
-                   preprocess, 
+                   preprocess,
+                   plot_res, 
                    num_samples=3, 
                    device='cpu'):
 
@@ -177,7 +186,7 @@ def evaluate_model(model,
                 inputs_norm = inputs.float()
                 means = inputs.mean(dim=1, keepdim=True)
                 stds = inputs.std(dim=1, keepdim=True)#.replace(0, 1e-8)
-                stds[stds == 0] = 1#e-8  # Avoid division by zero
+                stds[stds == 0] = 1e-8  # Avoid division by zero
                 inputs_norm = (inputs_norm - means) / stds
             elif normalization == 'uniform':
                 inputs_norm = inputs.float()
@@ -218,23 +227,25 @@ def evaluate_model(model,
 
     # Evaluate
     metrics = evaluate_forecast(y_test, y_pred)
-    for metric, value in metrics.items():
-        print(f"{metric}: {value:.4f}")
+    # for metric, value in metrics.items():
+    #     print(f"{metric}: {value:.4f}")
     
     
-    
-    plot_training_curves(train_losses, val_losses)
-    # plt.show()
+    if plot_res:
 
-    plot_sample_predictions(model,
-                            common_cols, 
-                            pred_len, 
-                            test_loader_actual, 
-                            normalization, 
-                            column_to_normalize, 
-                            target_index, 
-                            preprocess,
-                            num_samples=num_samples, 
-                            device=device)
+        plot_training_curves(train_losses, val_losses)
+        # plt.show()
 
-    plt.show()
+        plot_sample_predictions(model,
+                                common_cols, 
+                                pred_len, 
+                                test_loader_actual, 
+                                normalization, 
+                                column_to_normalize, 
+                                target_index, 
+                                preprocess,
+                                num_samples=num_samples, 
+                                device=device)
+
+        plt.show()
+    return metrics
