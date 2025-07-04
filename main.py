@@ -6,12 +6,13 @@ from utils.training import train_model, load_checkpoint_me
 from utils.evaluation import evaluate_model
 from utils.EDA import Explore_data
 from collections import defaultdict
+# from utils.augmentation import *
 
 
 
 def main():
     # Framework Settings
-    dataset_name = 'fin_TSM'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
+    dataset_name = 'fin_aal'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
 #  'fin_aal', 'fin_aapl', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt'
     normalization = 'relative'#'relative'#'uniform'# 'standard' # 'None'
     pred_len = 2
@@ -24,13 +25,22 @@ def main():
     lr = 0.0001
     phase = 'train'  # 'train' or 'test
     use_sentiment = 2# 0 --> no sentiment, int --> lagged version of sentiment
+    w_augment = {'w_jit': 1, 'w_crop':0, 
+                 'w_mag_warp':1, 'w_time_warp':0, 
+                 'w_rotation':0, 'w_rand_perm':0}
     iter = 5
     plot_res = False # If True, plots the results of the evaluation
     criterion = 'mse' # 'smape', 'mse', 'mae', 'mape' # Loss function to use, can be 'mse', 'mae', 'smape', or 'mape'
     print(f"Running with dataset: {dataset_name},\n model: {model_type},\n preprocess: {preprocess_type}, \n normalization: {normalization},\n sequence length: {seq_len}, \n prediction length: {pred_len},\n batch size: {batch_size}, \n learning rate: {lr},\n phase: {phase}")
     ####################################################################################
     # Load dataset
-    train_loader, test_loader, train_loader_actual, test_loader_actual, input_dim,output_dim, cols, target_index, columns_to_normalize = load_data(dataset_name, preprocess_type, seq_len, pred_len,batch_size, normalization, use_sentiment)
+    train_loader, test_loader, \
+        train_loader_actual, test_loader_actual,\
+              input_dim,output_dim, cols, target_index,\
+                  columns_to_normalize = load_data(dataset_name, 
+                                                   preprocess_type, 
+                                                   seq_len, pred_len,batch_size,
+                                                     normalization, use_sentiment, w_augment)
     #####################################################################################
     # Explore data
     Explore_data(eda, train_loader, test_loader, preprocess_type, cols, dataset_name, use_sentiment)

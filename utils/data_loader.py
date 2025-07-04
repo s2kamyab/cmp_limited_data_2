@@ -5,7 +5,154 @@ from torch.utils.data import DataLoader
 from scipy.stats import gaussian_kde
 from statsmodels.tsa.seasonal import seasonal_decompose
 from scipy.fft import fft
+from tsaug import AddNoise, Crop, Drift, TimeWarp
+from scipy.interpolate import interp1d
+# import sys
+# sys.path.append(r"paper_1_git_repo\\utils\\augmentation.py")
+# from paper_1_git_repo.utils.augmentation import *
 # from scipy.signal import cwt, ricker  # Ricker (Mexican hat) is a common wavelet
+
+
+# def random_permute_sequence(x, n_segments=4):
+#     T = x.shape[0]
+#     segment_len = T // n_segments
+#     segments = []
+
+#     for i in range(n_segments):
+#         start = i * segment_len
+#         end = (i + 1) * segment_len if i < n_segments - 1 else T
+#         segments.append(x[start:end])
+
+#     np.random.shuffle(segments)
+#     return np.concatenate(segments, axis=0)
+
+# def apply_random_permutation(X, p=0.5, n_segments=4, seed=None):
+#     if seed is not None:
+#         np.random.seed(seed)
+
+#     X = np.array(X)
+#     N = X.shape[0]
+#     is_multivariate = len(X.shape) == 3
+
+#     X_aug = []
+#     for i in range(N):
+#         if np.random.rand() < p:
+#             x_seq = X[i]
+#             if is_multivariate:
+#                 permuted = random_permute_sequence(x_seq)
+#             else:
+#                 permuted = random_permute_sequence(x_seq[:, np.newaxis]).squeeze()
+#             X_aug.append(permuted)
+#         else:
+#             X_aug.append(X[i])
+
+#     return np.stack(X_aug)
+
+def jitter(x, std):
+    sigma = 0.1*std
+    noise = np.random.normal(loc=0.0, scale=sigma, size=x.shape)
+    return x + noise
+def time_slicing(x, crop_size):
+    T = x.shape[0]
+    if crop_size >= T:
+        return x
+    start = np.random.randint(0, T - crop_size)
+    return x[start:start + crop_size]
+def magnitude_warp(x, std, knot=4):
+    x_mg = np.exp(0.01*np.random.rand()) * x
+    # from scipy.interpolate import CubicSpline
+    # knot = len(x)-2
+    # T = x.shape[0]
+    # orig_steps = np.arange(T)
+    # warp_steps = np.linspace(0, T - 1, num=knot + 2)
+    # warp_factors = np.random.normal(loc=1.0, scale=std, size=(knot + 2,))
+    # warp = CubicSpline(warp_steps, warp_factors)(orig_steps)
+    return x_mg #* warp[:, None] if x.ndim == 2 else x * warp
+# def time_warp(x):
+
+    # from scipy.interpolate import CubicSpline
+
+    # T = x.shape[0]
+    # sigma = 0.1*np.std(x)
+    # orig_steps = np.arange(T)
+    # warp_steps = np.linspace(0, T - 1, num=knot + 2)
+    # distort = np.random.normal(loc=0.0, scale=sigma, size=(knot + 2,))
+    # tt = CubicSpline(warp_steps, warp_steps + distort)(orig_steps)
+    # tt = np.clip(tt, 0, T - 1)
+
+    # if x.ndim == 1:
+    #     f = interp1d(orig_steps, x, kind='linear', fill_value='extrapolate')
+    #     return f(tt)
+    # else:
+    #     warped = [interp1d(orig_steps, x[:, i], kind='linear', fill_value='extrapolate')(tt) for i in range(x.shape[1])]
+    #     return np.stack(warped, axis=1)
+def rotation(x, k=None):
+    T = x.shape[0]
+    if k is None:
+        k = np.random.randint(1, T)
+    return np.roll(x, shift=k, axis=0)
+
+
+def augment_ts(X, w_jittering=1.0, w_crop=1.0, w_mag_warp=1.0, w_time_warp=1.0, w_rotation=1.0, w_rand_perm=1.0):
+    """
+    Apply selected augmentations to a batch of sequences.
+
+    Args:
+        X: np.ndarray of shape (N, T, C)
+        w_*: weights (0 or 1) to toggle each augmentation
+
+    Returns:
+        np.ndarray of augmented sequences with shape (N, T, C)
+    """
+    N = X.shape[0]
+    augmented_X = []
+    std_x = np.std(X, axis = 0)
+    for i in range(N):
+        x = X[i]  # shape (T, C)
+        augmented_X.append(x)
+        if np.random.rand() < w_jittering:
+            x_jittered = jitter(x, std_x)
+            augmented_X.append(x_jittered)
+        # if np.random.rand() < w_crop:
+        #     x_cropped = time_slicing(x, crop_size=len(x))
+        #     augmented_X.append(x_cropped)
+        if np.random.rand() < w_mag_warp:
+            x_mw = magnitude_warp(x, std_x)
+            augmented_X.append(x_mw)
+        # if np.random.rand() < w_time_warp:
+        #     x_tw = time_warp(x)
+        #     augmented_X.append(x_tw)
+        # if np.random.rand() < w_rotation:
+        #     x_rot = rotation(x)
+        #     augmented_X.append(x_rot)
+    return np.array(augmented_X)
+    #     augmented_X.append(x_i)
+    #     # Compose augmentations
+    #     aug = (
+    #         AddNoise(scale=0.1) @ w_jittering 
+    #         + Crop(size=x_i.shape[0]) @  w_crop  # use full length to avoid changing length
+    #         + Drift(max_drift=0.7, n_drift_points=5) @ w_mag_warp #(n_speed_change=3, magnitude=0.2) * 1
+    #         + TimeWarp(n_speed_change=3) @ w_time_warp 
+    #         # + w_rotation * Rotation(angle_range=(-20, 20)) * 1
+    #     )
+
+    #     # Apply tsaug augmentation
+    #     x_aug = aug.augment(x_i)
+    #     augmented_X.append(x_aug)
+
+    
+    # # augmented_X = np.stack(augmented_X)
+    # # Apply random permutation
+    # if w_rand_perm > 0:
+    #     t = apply_random_permutation(augmented_X, p=w_rand_perm, n_segments=4)
+    # else:
+    #     t = []
+    #     # augmented_X.append(t)
+    
+    # tt = np.concatenate((np.array(augmented_X), np.array(t)), axis=0)
+    # return tt
+
+
 
 def decompose_series(series, model='additive', freq=None):
     """
@@ -67,14 +214,24 @@ def normalise_selected_columns(window_data,columns_to_normalise, single_window=T
 #         # normalised_data.append(normalised_window)
 #         return np.array(normalised_window)
 
-
-def create_seqs_normalized(dfs, common_cols, seq_len, pred_len, normalization, columns_to_normalize, target_index):
+# w_augment = {'w_jit': 0.1, 'w_crop':0.1, 
+#                  'w_mag_warp':0.1, 'w_time_warp':0.1, 
+#                  'w_rotation':0.1, 'w_rand_perm':0.1}
+def create_seqs_normalized(dfs, common_cols, 
+                           seq_len, pred_len, normalization, columns_to_normalize, 
+                           target_index, w_augment):
     datasets = []
     datasets_actual = []
     # target_index = [common_cols.index('trend'), common_cols.index('seasonal'), common_cols.index('residual')]
 
     for df in dfs:
         values = df.values
+        values = augment_ts(values, w_jittering = w_augment['w_jit'],
+                            w_crop = w_augment['w_crop'],
+                            w_mag_warp = w_augment['w_mag_warp'],
+                            w_time_warp = w_augment['w_time_warp'], 
+                            w_rand_perm=w_augment['w_rand_perm'])
+        
         x_list, y_list = [], []
         x_list_actual, y_list_actual = [], []
         for i in range(len(values) - seq_len - pred_len):
@@ -179,7 +336,7 @@ def preprocess(preprocess, train1, test1, target_index):
 ###########################################################################################
 # load data
 ###########################################################################################
-def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalization, use_sentiment):
+def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalization, use_sentiment, w_aug):
     if dataset == 'soshianest_5627':
         df = pd.read_csv(r'data\\5627_dataset.csv')
         
@@ -408,8 +565,8 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
     train1, test1, target_index = preprocess(preprocess_type, train1, test1, target_index)   
     if preprocess_type == 'decompose':
         columns_to_normalize = range(len(train1.columns))#[train1.columns.get_loc('trend'), train1.columns.get_loc('seasonal'), train1.columns.get_loc('residual')]
-    train_dataset, input_dim, train_dataset_actual = create_seqs_normalized([train1],train1.columns, seq_len, pred_len, normalization, columns_to_normalize, target_index)
-    test_dataset, input_dim, test_dataset_actual = create_seqs_normalized([test1],test1.columns, seq_len, pred_len, normalization, columns_to_normalize, target_index)
+    train_dataset, input_dim, train_dataset_actual = create_seqs_normalized([train1],train1.columns, seq_len, pred_len, normalization, columns_to_normalize, target_index, w_aug)
+    test_dataset, input_dim, test_dataset_actual = create_seqs_normalized([test1],test1.columns, seq_len, pred_len, normalization, columns_to_normalize, target_index, w_aug)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader_actual = DataLoader(test_dataset_actual, batch_size=batch_size, shuffle=True)
