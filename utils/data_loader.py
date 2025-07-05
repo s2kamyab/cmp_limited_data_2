@@ -7,6 +7,7 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 from scipy.fft import fft
 from tsaug import AddNoise, Crop, Drift, TimeWarp
 from scipy.interpolate import interp1d
+from tslearn.barycenters import dtw_barycenter_averaging
 # import sys
 # sys.path.append(r"paper_1_git_repo\\utils\\augmentation.py")
 # from paper_1_git_repo.utils.augmentation import *
@@ -48,6 +49,57 @@ from scipy.interpolate import interp1d
 
 #     return np.stack(X_aug)
 
+def dba_augment(sequences, n_samples=5, seed=None):
+    """
+    Perform DBA (DTW Barycenter Averaging) augmentation.
+
+    Parameters:
+        sequences (np.ndarray): Array of shape (N, T, C) — N sequences, T time steps, C features
+        n_samples (int): Number of sequences to randomly select and average
+        seed (int): Optional random seed for reproducibility
+
+    Returns:
+        np.ndarray: A single synthetic sequence of shape (T, C)
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    N, T, C = sequences.shape
+    indices = np.random.choice(N, size=n_samples, replace=True)
+    selected = sequences[indices]  # (n_samples, T, C)
+
+    # DBA in tslearn works on (n_samples, T, C)
+    synthetic = dtw_barycenter_averaging(selected)
+
+    return synthetic  # shape: (T, C)
+
+def moving_block_bootstrap(x, block_size=5, seed=None):
+    """
+    Apply Moving Block Bootstrap (MBB) to a multivariate time series.
+
+    Parameters:
+        x (np.ndarray): Time series of shape (T, C)
+        block_size (int): Size of each block to sample
+        seed (int or None): Random seed for reproducibility
+
+    Returns:
+        np.ndarray: Resampled time series of shape (T, C)
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    T, C = x.shape
+    n_blocks = int(np.ceil(T / block_size))
+    
+    blocks = []
+    for _ in range(n_blocks):
+        start = np.random.randint(0, T - block_size + 1)
+        block = x[start:start + block_size]
+        blocks.append(block)
+
+    x_boot = np.concatenate(blocks, axis=0)[:T]  # Truncate to original length
+    return x_boot
+
 def jitter(x, std):
     sigma = 0.1*std
     noise = np.random.normal(loc=0.0, scale=sigma, size=x.shape)
@@ -60,14 +112,8 @@ def time_slicing(x, crop_size):
     return x[start:start + crop_size]
 def magnitude_warp(x, std, knot=4):
     x_mg = np.exp(0.01*np.random.rand()) * x
-    # from scipy.interpolate import CubicSpline
-    # knot = len(x)-2
-    # T = x.shape[0]
-    # orig_steps = np.arange(T)
-    # warp_steps = np.linspace(0, T - 1, num=knot + 2)
-    # warp_factors = np.random.normal(loc=1.0, scale=std, size=(knot + 2,))
-    # warp = CubicSpline(warp_steps, warp_factors)(orig_steps)
-    return x_mg #* warp[:, None] if x.ndim == 2 else x * warp
+    return x_mg
+
 # def time_warp(x):
 
     # from scipy.interpolate import CubicSpline
@@ -93,7 +139,7 @@ def rotation(x, k=None):
     return np.roll(x, shift=k, axis=0)
 
 
-def augment_ts(X, w_jittering=1.0, w_crop=1.0, w_mag_warp=1.0, w_time_warp=1.0, w_rotation=1.0, w_rand_perm=1.0):
+def augment_ts(X, w_jittering=1.0, w_crop=1.0, w_mag_warp=1.0, w_time_warp=1.0, w_rotation=1.0, w_rand_perm=1.0, w_mbb = 1.0):
     """
     Apply selected augmentations to a batch of sequences.
 
@@ -118,6 +164,9 @@ def augment_ts(X, w_jittering=1.0, w_crop=1.0, w_mag_warp=1.0, w_time_warp=1.0, 
         #     augmented_X.append(x_cropped)
         if np.random.rand() < w_mag_warp:
             x_mw = magnitude_warp(x, std_x)
+            augmented_X.append(x_mw)
+        if np.random.rand() < w_mbb:
+            x_mbb = moving_block_bootstrap(x, block_size=5, seed=None)
             augmented_X.append(x_mw)
         # if np.random.rand() < w_time_warp:
         #     x_tw = time_warp(x)
@@ -230,7 +279,8 @@ def create_seqs_normalized(dfs, common_cols,
                             w_crop = w_augment['w_crop'],
                             w_mag_warp = w_augment['w_mag_warp'],
                             w_time_warp = w_augment['w_time_warp'], 
-                            w_rand_perm=w_augment['w_rand_perm'])
+                            w_rand_perm=w_augment['w_rand_perm'],
+                            w_mbb = w_augment['w_mbb'])
         
         x_list, y_list = [], []
         x_list_actual, y_list_actual = [], []
@@ -531,9 +581,6 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
         else:
             df['Scaled_sentiment'] = df['Scaled_sentiment'].shift(use_sentiment).fillna(0)
             df['Sentiment_gpt'] = df['Sentiment_gpt'].shift(use_sentiment).fillna(0)
-
-        
-
         exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
         # Get indexes of columns to keep
         include_cols = [col for col in df.columns if col not in exclude_cols]
@@ -543,6 +590,86 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
 
     elif dataset == 'fin_wmt':
         df = pd.read_csv(r'data\\WMT.csv')
+        # target_index = df.columns.to_list().index('Close')
+        df['time_step'] = range(len(df))
+        df = df.drop('Date', axis=1)
+        df = df.drop('News_flag', axis=1)
+        if use_sentiment == 0:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+
+        exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
+        target_index = df.columns.to_list().index('Close')
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
+    elif dataset == 'fin_amzn':
+        df = pd.read_csv(r'data\\AMZN.csv')
+        # target_index = df.columns.to_list().index('Close')
+        df['time_step'] = range(len(df))
+        df = df.drop('Date', axis=1)
+        df = df.drop('News_flag', axis=1)
+        if use_sentiment == 0:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+
+        exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
+        target_index = df.columns.to_list().index('Close')
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
+    elif dataset == 'fin_baba':
+        df = pd.read_csv(r'data\\BABA.csv')
+        # target_index = df.columns.to_list().index('Close')
+        df['time_step'] = range(len(df))
+        df = df.drop('Date', axis=1)
+        df = df.drop('News_flag', axis=1)
+        if use_sentiment == 0:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+
+        exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
+        target_index = df.columns.to_list().index('Close')
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
+    elif dataset == 'fin_brkb':
+        df = pd.read_csv(r'data\\BRK-B.csv')
+        # target_index = df.columns.to_list().index('Close')
+        df['time_step'] = range(len(df))
+        df = df.drop('Date', axis=1)
+        df = df.drop('News_flag', axis=1)
+        if use_sentiment == 0:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+
+        exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
+        target_index = df.columns.to_list().index('Close')
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
+    elif dataset == 'fin_cost':
+        df = pd.read_csv(r'data\\COST.csv')
+        # target_index = df.columns.to_list().index('Close')
+        df['time_step'] = range(len(df))
+        df = df.drop('Date', axis=1)
+        df = df.drop('News_flag', axis=1)
+        if use_sentiment == 0:
+            df = df.drop('Scaled_sentiment', axis=1)
+            df = df.drop('Sentiment_gpt', axis=1)
+
+        exclude_cols = []#['Scaled_sentiment', 'Sentiment_gpt']
+        # Get indexes of columns to keep
+        include_cols = [col for col in df.columns if col not in exclude_cols]
+        columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
+        target_index = df.columns.to_list().index('Close')
+        train1, test1 = train_test_split_time_series(df, test_size=0.3)
+    elif dataset == 'fin_ebay':
+        df = pd.read_csv(r'data\\ebay.csv')
         # target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)

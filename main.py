@@ -12,8 +12,9 @@ from collections import defaultdict
 
 def main():
     # Framework Settings
-    dataset_name = 'fin_aal'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
-#  'fin_aal', 'fin_aapl', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt'
+    dataset_name = 'fin_baba'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
+#  'fin_aal', 'fin_aapl', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt', 'fin_amzn', 'fin_baba',
+# 'fin_brkb', 'fin_cost', 'fin_ebay', 
     normalization = 'relative'#'relative'#'uniform'# 'standard' # 'None'
     pred_len = 2
     seq_len = 16
@@ -27,7 +28,8 @@ def main():
     use_sentiment = 2# 0 --> no sentiment, int --> lagged version of sentiment
     w_augment = {'w_jit': 1, 'w_crop':0, 
                  'w_mag_warp':1, 'w_time_warp':0, 
-                 'w_rotation':0, 'w_rand_perm':0}
+                 'w_rotation':0, 'w_rand_perm':0,
+                 'w_mbb' : 0, 'w_dbn': 0,}
     iter = 5
     plot_res = False # If True, plots the results of the evaluation
     criterion = 'mse' # 'smape', 'mse', 'mae', 'mape' # Loss function to use, can be 'mse', 'mae', 'smape', or 'mape'
