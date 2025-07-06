@@ -12,7 +12,7 @@ from collections import defaultdict
 
 def main():
     # Framework Settings
-    dataset_name = 'fin_baba'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
+    dataset_name = 'fin_aal'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
 #  'fin_aal', 'fin_aapl', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt', 'fin_amzn', 'fin_baba',
 # 'fin_brkb', 'fin_cost', 'fin_ebay', 
     normalization = 'relative'#'relative'#'uniform'# 'standard' # 'None'
@@ -21,13 +21,13 @@ def main():
     batch_size = 32
     preprocess_type ='None'#'fft'#'decompose'#'None'
     eda = True
-    model_type = 'GPT2like_transformer'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
+    model_type = 'rnn'#'ETS'#'GPT2like_transformer'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
     epoch = 100
     lr = 0.0001
     phase = 'train'  # 'train' or 'test
     use_sentiment = 2# 0 --> no sentiment, int --> lagged version of sentiment
-    w_augment = {'w_jit': 1, 'w_crop':0, 
-                 'w_mag_warp':1, 'w_time_warp':0, 
+    w_augment = {'w_jit': 0, 'w_crop':0, 
+                 'w_mag_warp':0, 'w_time_warp':0, 
                  'w_rotation':0, 'w_rand_perm':0,
                  'w_mbb' : 0, 'w_dbn': 0,}
     iter = 5

@@ -123,9 +123,9 @@ class LSTMTimeSeriesModel(nn.Module):
         return x[:, -self.pred_len:, :]  # Keep last 3 time steps, shape: (batch, 3, 1)
 
 class SimpleRNNTimeSeriesModel(nn.Module):
-    def __init__(self, pred_len, output_dim):
+    def __init__(self, input_dim, pred_len, output_dim):
         super(SimpleRNNTimeSeriesModel, self).__init__()
-        self.rnn1 = nn.RNN(input_size=2, hidden_size=100, batch_first=True)
+        self.rnn1 = nn.RNN(input_size=input_dim, hidden_size=100, batch_first=True)
         self.dropout1 = nn.Dropout(p=0.2)
         self.rnn2 = nn.RNN(input_size=100, hidden_size=100, batch_first=True)
         self.rnn3 = nn.RNN(input_size=100, hidden_size=100, batch_first=True)
@@ -188,7 +188,7 @@ def load_model(model_type, input_dim, output_dim, seq_len, pred_len, lr=0.0001):
     elif model_type == 'lstm':
         model = LSTMTimeSeriesModel(pred_len,output_dim)
     elif model_type == 'rnn':
-        model = SimpleRNNTimeSeriesModel(pred_len,output_dim)
+        model = SimpleRNNTimeSeriesModel(input_dim,pred_len,output_dim)
     elif model_type == 'times_net':
         model = TimesNet(input_features=input_dim, sequence_length=seq_len, output_length=pred_len)
     else:

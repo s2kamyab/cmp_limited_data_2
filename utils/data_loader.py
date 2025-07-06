@@ -49,28 +49,27 @@ from tslearn.barycenters import dtw_barycenter_averaging
 
 #     return np.stack(X_aug)
 
-def dba_augment(sequences, n_samples=5, seed=None):
+def dba_augment_single(sequence, std, n_variants=5, seed=None):
     """
-    Perform DBA (DTW Barycenter Averaging) augmentation.
+    Perform DBA-based augmentation starting from a single sequence.
 
     Parameters:
-        sequences (np.ndarray): Array of shape (N, T, C) — N sequences, T time steps, C features
-        n_samples (int): Number of sequences to randomly select and average
-        seed (int): Optional random seed for reproducibility
+        sequence (np.ndarray): Array of shape (T, C)
+        n_variants (int): Number of noisy variants to generate
+        sigma (float): Jittering noise scale
+        seed (int): Optional random seed
 
     Returns:
         np.ndarray: A single synthetic sequence of shape (T, C)
     """
+    sigma = 0.1*std
     if seed is not None:
         np.random.seed(seed)
 
-    N, T, C = sequences.shape
-    indices = np.random.choice(N, size=n_samples, replace=True)
-    selected = sequences[indices]  # (n_samples, T, C)
+    T, C = sequence.shape
+    variants = np.stack([jitter(sequence, sigma) for _ in range(n_variants)], axis=0)  # shape: (n_variants, T, C)
 
-    # DBA in tslearn works on (n_samples, T, C)
-    synthetic = dtw_barycenter_averaging(selected)
-
+    synthetic = dtw_barycenter_averaging(variants)
     return synthetic  # shape: (T, C)
 
 def moving_block_bootstrap(x, block_size=5, seed=None):
@@ -139,7 +138,7 @@ def rotation(x, k=None):
     return np.roll(x, shift=k, axis=0)
 
 
-def augment_ts(X, w_jittering=1.0, w_crop=1.0, w_mag_warp=1.0, w_time_warp=1.0, w_rotation=1.0, w_rand_perm=1.0, w_mbb = 1.0):
+def augment_ts(X, Y, w_augment):#w_jittering=1.0, w_crop=1.0, w_mag_warp=1.0, w_time_warp=1.0, w_rotation=1.0, w_rand_perm=1.0, w_mbb = 1.0):
     """
     Apply selected augmentations to a batch of sequences.
 
@@ -150,31 +149,52 @@ def augment_ts(X, w_jittering=1.0, w_crop=1.0, w_mag_warp=1.0, w_time_warp=1.0, 
     Returns:
         np.ndarray of augmented sequences with shape (N, T, C)
     """
+    w_jittering = w_augment['w_jit']
+    w_crop = w_augment['w_crop']
+    w_mag_warp = w_augment['w_mag_warp']
+    w_time_warp = w_augment['w_time_warp']
+    w_rand_perm=w_augment['w_rand_perm']
+    w_mbb = w_augment['w_mbb']
+    w_dbn = w_augment['w_dbn']
+    w_rotation = w_augment['w_rotation']
     N = X.shape[0]
     augmented_X = []
-    std_x = np.std(X, axis = 0)
+    augmented_y = []
+    
     for i in range(N):
+
         x = X[i]  # shape (T, C)
+        std_x = np.std(x, axis = 0)
         augmented_X.append(x)
+        augmented_y.append(Y[i])
         if np.random.rand() < w_jittering:
             x_jittered = jitter(x, std_x)
             augmented_X.append(x_jittered)
+            augmented_y.append(Y[i])
         # if np.random.rand() < w_crop:
         #     x_cropped = time_slicing(x, crop_size=len(x))
         #     augmented_X.append(x_cropped)
         if np.random.rand() < w_mag_warp:
             x_mw = magnitude_warp(x, std_x)
             augmented_X.append(x_mw)
+            augmented_y.append(Y[i])
         if np.random.rand() < w_mbb:
             x_mbb = moving_block_bootstrap(x, block_size=5, seed=None)
-            augmented_X.append(x_mw)
+            augmented_X.append(x_mbb)
+            augmented_y.append(Y[i])
+        if np.random.rand() < w_dbn:
+            x_dbn = dba_augment_single(x,std_x, n_variants=5, seed=None)
+            augmented_X.append(x_dbn)
+            augmented_y.append(Y[i])
+
         # if np.random.rand() < w_time_warp:
         #     x_tw = time_warp(x)
         #     augmented_X.append(x_tw)
-        # if np.random.rand() < w_rotation:
-        #     x_rot = rotation(x)
-        #     augmented_X.append(x_rot)
-    return np.array(augmented_X)
+        if np.random.rand() < w_rotation:
+            x_rot = rotation(x)
+            augmented_X.append(x_rot)
+            augmented_y.append(Y[i])
+    return np.array(augmented_X), np.array(augmented_y)
     #     augmented_X.append(x_i)
     #     # Compose augmentations
     #     aug = (
@@ -200,6 +220,7 @@ def augment_ts(X, w_jittering=1.0, w_crop=1.0, w_mag_warp=1.0, w_time_warp=1.0, 
     
     # tt = np.concatenate((np.array(augmented_X), np.array(t)), axis=0)
     # return tt
+
 
 
 
@@ -275,12 +296,12 @@ def create_seqs_normalized(dfs, common_cols,
 
     for df in dfs:
         values = df.values
-        values = augment_ts(values, w_jittering = w_augment['w_jit'],
-                            w_crop = w_augment['w_crop'],
-                            w_mag_warp = w_augment['w_mag_warp'],
-                            w_time_warp = w_augment['w_time_warp'], 
-                            w_rand_perm=w_augment['w_rand_perm'],
-                            w_mbb = w_augment['w_mbb'])
+        # values = augment_ts(values, w_jittering = w_augment['w_jit'],
+        #                     w_crop = w_augment['w_crop'],
+        #                     w_mag_warp = w_augment['w_mag_warp'],
+        #                     w_time_warp = w_augment['w_time_warp'], 
+        #                     w_rand_perm=w_augment['w_rand_perm'],
+        #                     w_mbb = w_augment['w_mbb'])
         
         x_list, y_list = [], []
         x_list_actual, y_list_actual = [], []
@@ -324,9 +345,15 @@ def create_seqs_normalized(dfs, common_cols,
             y_list.append(y_seq_normalized)
             x_list_actual.append(x_seq)
             y_list_actual.append(y_seq)
+        x_array = np.array(x_list)
+        y_array = np.array(y_list)
+        x_array, y_array = augment_ts(x_array, y_array, w_augment) 
 
-        x_tensor = torch.tensor(np.array(x_list), dtype=torch.float32)
-        y_tensor = torch.tensor(np.array(y_list), dtype=torch.float32)
+        x_tensor = torch.tensor(x_array, dtype=torch.float32)
+        y_tensor = torch.tensor(y_array, dtype=torch.float32)
+
+        # x_tensor = torch.tensor(np.array(x_list), dtype=torch.float32)
+        # y_tensor = torch.tensor(np.array(y_list), dtype=torch.float32)
         datasets.append(torch.utils.data.TensorDataset(x_tensor, y_tensor))
         x_tensor_actual = torch.tensor(np.array(x_list_actual), dtype=torch.float32)
         y_tensor_actual = torch.tensor(np.array(y_list_actual), dtype=torch.float32)
