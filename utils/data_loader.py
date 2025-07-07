@@ -413,7 +413,14 @@ def preprocess(preprocess, train1, test1, target_index):
 ###########################################################################################
 # load data
 ###########################################################################################
-def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalization, use_sentiment, w_aug):
+def load_data(dataset, 
+              preprocess_type,
+                seq_len, 
+                pred_len,
+                batch_size,
+                  normalization,
+                    use_sentiment,
+                      w_aug):
     if dataset == 'soshianest_5627':
         df = pd.read_csv(r'data\\5627_dataset.csv')
         
@@ -728,7 +735,7 @@ def load_data(dataset, preprocess_type, seq_len, pred_len,batch_size, normalizat
     train_loader_actual = DataLoader(train_dataset_actual, batch_size=batch_size, shuffle=True)
     # if eda:
     #     plot_train_test_target_distributions(train_loader, test_loader, num_outputs=len(target_index))
-    return train_loader, test_loader, train_loader_actual, test_loader_actual, input_dim, output_dim, train1.columns.tolist(), target_index, columns_to_normalize
+    return train1, test1, train_loader, test_loader, train_loader_actual, test_loader_actual, input_dim, output_dim, train1.columns.tolist(), target_index, columns_to_normalize
 # # Test csvs = 50
 #     names_50 = ['aal.csv', 'AAPL.csv', 'ABBV.csv', 'AMD.csv', 'amgn.csv', 'AMZN.csv', 'BABA.csv',
 #                 'bhp.csv', 'bidu.csv', 'biib.csv', 'BRK-B.csv', 'C.csv', 'cat.csv', 'cmcsa.csv', 'cmg.csv',

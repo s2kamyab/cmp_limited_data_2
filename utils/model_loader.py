@@ -3,6 +3,106 @@ import numpy as np
 import torch
 import torch.nn as nn
 from utils.tst import Transformer
+from statsmodels.tsa.api import VAR
+import pandas as pd
+
+
+class VARTimeSeries:
+    def __init__(self, pred_len, seq_len):
+        """
+        VAR model wrapper for multivariate time series forecasting.
+
+        Args:
+            pred_len (int): Number of future steps to forecast.
+            maxlags (int): Maximum lags to consider for VAR model.
+        """
+        self.pred_len = pred_len
+        self.seq_len = seq_len
+        # self.test_size = test_size
+        # self.maxlags = maxlags
+
+    def forward(self, train1, test1, normalization, target_index):
+        history = train1.iloc[-self.seq_len:,:]
+        if normalization == 'standard':
+            x_mean = history.mean(axis=0)#, keepdim=True)  # (N, F)
+            x_std = history.std(axis=0)#, keepdim=True)
+            x_std[x_std == 0] = 1e-8
+            x_norm = (history - x_mean) / x_std
+            # --- Normalize target to same scale (optional but typical) ---
+            # y_norm = (test1.iloc[:, target_index] - np.tile(np.expand_dims(x_mean[ target_index], axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std[ target_index], axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
+            y_norm = (test1 - np.tile(np.expand_dims(x_mean, axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std, axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
+        elif normalization == 'minmax':
+            x_min = history.min(dim=1, keepdim=True)[0]
+            x_min = np.tile(np.expand_dims(x_min[:,  target_index], axis=1), [1,history.shape[1],1] )
+            x_max = history.max(dim=1, keepdim=True)[0]
+            x_max = np.tile(np.expand_dims(x_max[:,  target_index], axis=1), [1,history.shape[1],1] )
+            x_norm = (history - x_min) / (x_max - x_min + 1e-8)
+            # y_norm = (test1.iloc[:, target_index]  - x_min.iloc[:, target_index] ) / (x_max - x_min + 1e-8)
+            y_norm = (test1 - x_min ) / (x_max - x_min + 1e-8)
+        elif normalization == 'relative':
+            ref = history.iloc[-1, :]  # last time step
+            ref[ref == 0] = 1e-8
+            x_norm = history / np.tile(np.expand_dims(ref,axis=0),[history.shape[0],1])  # assuming x relates to 1st feature
+            # y_norm = test1.iloc[:,target_index] / np.tile(np.expand_dims(ref.iloc[target_index], axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
+            y_norm = test1 / np.tile(np.expand_dims(ref, axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
+        history = x_norm#pd.DataFrame(x_norm, columns = train1.columns)
+        prediction = []
+        gt = []
+        for step in range(50):#len(test1)):
+            model = VAR(endog=history)#, freq='d')
+            model_fit = model.fit()
+            # make prediction on validation
+            tt = model_fit.forecast(model_fit.endog, steps=self.pred_len)
+            tt[abs(tt)>4]=0
+            prediction.append(tt[:, target_index])
+            gt.append(y_norm.iloc[step:step+self.pred_len,target_index].values)
+            ########################### Update train  history#################################
+            # move the training window
+            # print(train.values.shape, train.index.shape)
+            hist = history.values#[x for x in train]
+            # hist_index = history.index#[(-training_window):]
+            # print(hist.index)
+            for i in range(step+1):
+
+                obs = y_norm.iloc[i,:].values
+                obs = np.expand_dims(obs , axis=0)
+                hist= np.concatenate((hist, obs), axis=0)#append(obs)
+                hist = hist[1:]
+
+                # hist_index = pd.DatetimeIndex(np.append(hist_index, pd.to_datetime(test1.index[i])))
+
+                # hist_index = hist_index[1:]
+            history = pd.DataFrame(data=np.array(hist), columns = train1.columns)#, index = hist_index)
+
+
+            ###############################################################################
+            ###############################################################################
+
+                    # """
+        # Forward pass to generate forecasts.
+
+        # Args:
+        #     x (np.ndarray): Input of shape (batch_size, seq_len, features)
+
+        # Returns:
+        #     np.ndarray: Forecasts of shape (batch_size, pred_len, features)
+        # """
+        # N, n_feat = x.shape
+        # preds = np.zeros((self.pred_len, n_feat))
+
+        # # for i in range(N):
+        # try:
+        #     series_df = np.array(x.values)#[i]
+        #     model = VAR(series_df)
+        #     model_fit = model.fit(maxlags=self.maxlags, ic='aic')
+        #     forecast = model_fit.forecast(y=series_df, steps=self.pred_len)
+        #     preds = forecast
+        # except Exception as e:
+        #     print(f"Error in sample : {e}")
+        #     preds = np.nan
+        return np.array(prediction), np.array(gt)
+    
+
 class GPT2TimeSeries(nn.Module):
     def __init__(self, input_dim, output_dim, seq_len, pred_len, d_model=64, nhead=4, num_layers=4):
         super(GPT2TimeSeries, self).__init__()
@@ -191,10 +291,17 @@ def load_model(model_type, input_dim, output_dim, seq_len, pred_len, lr=0.0001):
         model = SimpleRNNTimeSeriesModel(input_dim,pred_len,output_dim)
     elif model_type == 'times_net':
         model = TimesNet(input_features=input_dim, sequence_length=seq_len, output_length=pred_len)
+    elif model_type == 'var':
+        # Initialize VAR model
+        model = VARTimeSeries(seq_len=512, pred_len=pred_len)
+
     else:
         raise ValueError(f"Model type '{model_type}' is not recognized.")
     # Define loss function and optimizer
     # criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)  # Adjust learning rate as needed
+    if model_type != 'var':
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)  # Adjust learning rate as needed
+    else:
+         optimizer = []
     
     return model, optimizer

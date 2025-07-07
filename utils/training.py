@@ -102,7 +102,7 @@ def load_checkpoint_me(model, optimizer, path='checkpoint.pth'):
 
 
 
-def train_model(model, 
+def train_model(model,
                 train_loader_actual, 
                 test_loader_actual, 
                 criterion, 
@@ -115,7 +115,7 @@ def train_model(model,
                 load_checkpoint=False):
     
 
-
+        
     if load_checkpoint == True:
         model, optimizer, epoch, loss, val_loss = load_checkpoint_me(model, optimizer, path=chkpnt_path)
         print(f"Loaded checkpoint from {chkpnt_path} at epoch {epoch} with loss {loss:.4f}")
