@@ -5,8 +5,73 @@ import torch.nn as nn
 from utils.tst import Transformer
 from statsmodels.tsa.api import VAR
 import pandas as pd
+from statsmodels.tsa.holtwinters import SimpleExpSmoothing, Holt
 
+class ETSTimeSeries:
+    def __init__(self, pred_len, seq_len):
+        """
+        VAR model wrapper for multivariate time series forecasting.
 
+        Args:
+            pred_len (int): Number of future steps to forecast.
+            maxlags (int): Maximum lags to consider for VAR model.
+        """
+        self.pred_len = pred_len
+        self.seq_len = seq_len
+        # self.test_size = test_size
+        # self.maxlags = maxlags
+
+    def forward(self, train1, test1, normalization, target_index):
+        history = train1.iloc[-self.seq_len:,:]
+        if normalization == 'standard':
+            x_mean = history.mean(axis=0)#, keepdim=True)  # (N, F)
+            x_std = history.std(axis=0)#, keepdim=True)
+            x_std[x_std == 0] = 1e-8
+            x_norm = (history - np.tile(np.expand_dims(x_mean, axis = 0), [history.shape[0],1])) / np.tile(np.expand_dims(x_std, axis = 0), [history.shape[0],1])
+            # --- Normalize target to same scale (optional but typical) ---
+            # y_norm = (test1.iloc[:, target_index] - np.tile(np.expand_dims(x_mean[ target_index], axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std[ target_index], axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
+            y_norm = (test1 - np.tile(np.expand_dims(x_mean, axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std, axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
+        elif normalization == 'minmax':
+            x_min = history.min(dim=1, keepdim=True)[0]
+            x_min = np.tile(np.expand_dims(x_min[:,  target_index], axis=1), [1,history.shape[1],1] )
+            x_max = history.max(dim=1, keepdim=True)[0]
+            x_max = np.tile(np.expand_dims(x_max[:,  target_index], axis=1), [1,history.shape[1],1] )
+            x_norm = (history - x_min) / (x_max - x_min + 1e-8)
+            # y_norm = (test1.iloc[:, target_index]  - x_min.iloc[:, target_index] ) / (x_max - x_min + 1e-8)
+            y_norm = (test1 - x_min ) / (x_max - x_min + 1e-8)
+        elif normalization == 'relative':
+            ref = history.iloc[-1, :]  # last time step
+            ref[ref == 0] = 1e-8
+            x_norm = history / np.tile(np.expand_dims(ref,axis=0),[history.shape[0],1])  # assuming x relates to 1st feature
+            # y_norm = test1.iloc[:,target_index] / np.tile(np.expand_dims(ref.iloc[target_index], axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
+            y_norm = test1 / np.tile(np.expand_dims(ref, axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
+        history = x_norm#pd.DataFrame(x_norm, columns = train1.columns)
+        prediction = []
+        gt = []
+        for step in range(50):#len(test1)):
+            # model = SimpleExpSmoothing(np.asarray(history.iloc[:, target_index].values))#, freq='d')
+            model = Holt(np.asarray(history.iloc[:, target_index].values))
+            model_fit = model.fit()
+            # make prediction on validation
+            tt = model_fit.forecast(steps=self.pred_len)
+            # tt[abs(tt)>4]=0
+            prediction.append(tt)#[:, target_index])
+            gt.append(y_norm.iloc[step:step+self.pred_len,target_index].values)
+            ########################### Update train  history#################################
+            # move the training window
+            # print(train.values.shape, train.index.shape)
+            hist = history.values#[x for x in train]
+            for i in range(step+1):
+
+                obs = y_norm.iloc[i,:].values
+                obs = np.expand_dims(obs , axis=0)
+                hist= np.concatenate((hist, obs), axis=0)#append(obs)
+                hist = hist[1:]
+
+            history = pd.DataFrame(data=np.array(hist), columns = train1.columns)#, index = hist_index)
+
+        return np.array(prediction), np.array(gt)
+    
 class VARTimeSeries:
     def __init__(self, pred_len, seq_len):
         """
@@ -181,9 +246,9 @@ class CNNTimeSeriesModel(nn.Module):
         return x
     
 class GRUTimeSeriesModel(nn.Module):
-    def __init__(self, pred_len, output_dim=1):
+    def __init__(self, input_dim, pred_len, output_dim=1):
         super(GRUTimeSeriesModel, self).__init__()
-        self.gru1 = nn.GRU(input_size=2, hidden_size=100, batch_first=True, dropout=0.0, bidirectional=False)
+        self.gru1 = nn.GRU(input_size=input_dim, hidden_size=100, batch_first=True, dropout=0.0, bidirectional=False)
         self.gru2 = nn.GRU(input_size=100, hidden_size=100, batch_first=True, dropout=0.0, bidirectional=False)
         self.gru3 = nn.GRU(input_size=100, hidden_size=100, batch_first=True, dropout=0.0, bidirectional=False)
         self.gru4 = nn.GRU(input_size=100, hidden_size=100, batch_first=True, dropout=0.0, bidirectional=False)
@@ -201,9 +266,9 @@ class GRUTimeSeriesModel(nn.Module):
         return x[:, -self.pred_len:, :]  # Keep last 3 time steps, shape: (batch, 3, 1)
     
 class LSTMTimeSeriesModel(nn.Module):
-    def __init__(self, pred_len, output_dim=1):
+    def __init__(self, input_dim, pred_len, output_dim=1):
         super(LSTMTimeSeriesModel, self).__init__()
-        self.lstm1 = nn.LSTM(input_size=2, hidden_size=100, batch_first=True)
+        self.lstm1 = nn.LSTM(input_size=input_dim, hidden_size=100, batch_first=True)
         self.dropout1 = nn.Dropout(p=0.2)
         self.lstm2 = nn.LSTM(input_size=100, hidden_size=100, batch_first=True)
         self.lstm3 = nn.LSTM(input_size=100, hidden_size=100, batch_first=True)
@@ -255,6 +320,7 @@ class TimesNet(nn.Module):
         self.dense = nn.Linear(64 * sequence_length, output_length)
 
     def forward(self, x):
+        x = x.permute(0, 2, 1)  # Convert to (batch, channels, seq_len)
         for conv in self.conv_layers:
             x = torch.relu(conv(x))
         x = self.flatten(x)
@@ -284,22 +350,25 @@ def load_model(model_type, input_dim, output_dim, seq_len, pred_len, lr=0.0001):
     elif model_type == 'cnn':
         model = CNNTimeSeriesModel(input_dim,output_dim, seq_len, pred_len)
     elif model_type == 'gru':
-        model = GRUTimeSeriesModel(pred_len,output_dim)
+        model = GRUTimeSeriesModel(input_dim, pred_len,output_dim)
     elif model_type == 'lstm':
-        model = LSTMTimeSeriesModel(pred_len,output_dim)
+        model = LSTMTimeSeriesModel(input_dim,pred_len,output_dim)
     elif model_type == 'rnn':
         model = SimpleRNNTimeSeriesModel(input_dim,pred_len,output_dim)
     elif model_type == 'times_net':
         model = TimesNet(input_features=input_dim, sequence_length=seq_len, output_length=pred_len)
     elif model_type == 'var':
         # Initialize VAR model
-        model = VARTimeSeries(seq_len=512, pred_len=pred_len)
+        model = VARTimeSeries(seq_len=seq_len, pred_len=pred_len)
+    elif model_type == 'ets':
+        # Initialize VAR model
+        model = ETSTimeSeries(seq_len=seq_len, pred_len=pred_len)
 
     else:
         raise ValueError(f"Model type '{model_type}' is not recognized.")
     # Define loss function and optimizer
     # criterion = nn.MSELoss()
-    if model_type != 'var':
+    if model_type not in{'var', 'ets'} :
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)  # Adjust learning rate as needed
     else:
          optimizer = []

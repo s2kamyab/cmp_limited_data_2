@@ -4,15 +4,21 @@ import torch
 from data_loader import normalise_selected_columns
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 def smape(y_true, y_pred):
+    eps=0.1
     denominator = (np.abs(y_true) + np.abs(y_pred)) / 2
     # Avoid divide-by-zero
     denominator = np.where(denominator == 0, 1e-8, denominator)
-    return np.mean(np.abs(y_pred - y_true) / denominator) * 100
+    mask = denominator > eps  # avoid division by small number
+    smape = np.mean(np.abs(y_pred[mask] - y_true[mask]) / denominator[mask]) * 100
+    return smape#np.mean(np.abs(y_pred - y_true) / denominator) * 100
 
 def mape(y_true, y_pred):
     # Avoid divide-by-zero
+    eps=0.1
+    
     y_true = np.where(y_true == 0, 1e-8, y_true)
-    return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+    mask = y_true > eps 
+    return np.mean(np.abs((y_true [mask] - y_pred[mask]) / y_true[mask])) * 100
 
 def evaluate_forecast(y_true, y_pred):
     metrics = {
@@ -202,6 +208,9 @@ def evaluate_model(model,
                 inputs_norm = inputs_norm.unsqueeze(0)
 
             outputs_norm = model(inputs_norm)
+            
+            if len(outputs_norm.shape) == 2:
+                outputs_norm = torch.unsqueeze(outputs_norm , dim = 2)
             t = outputs_norm
             if normalization == 'standard':
                 # means = inputs.mean(dim=1, keepdim=True)

@@ -284,6 +284,8 @@ def train_model(model,
                         output_norm = torch.unsqueeze(output_norm, dim=2)
                         y_norm = y_norm.sum(dim=2)  # sum over the last dimension
                         y_norm = torch.unsqueeze(y_norm, dim=2)
+                elif len(output_norm.shape) == 2:
+                    output_norm = torch.unsqueeze(output_norm, dim=2)
 
 
                 if normalization == 'standard':

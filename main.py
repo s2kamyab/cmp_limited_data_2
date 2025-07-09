@@ -7,6 +7,8 @@ from utils.evaluation import evaluate_model
 from utils.EDA import Explore_data
 from utils.evaluation import evaluate_forecast
 from collections import defaultdict
+import matplotlib.pyplot as plt
+import numpy as np
 # from utils.augmentation import *
 
 
@@ -17,12 +19,12 @@ def main():
 #  'fin_aal', 'fin_aapl', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt', 'fin_amzn', 'fin_baba',
 # 'fin_brkb', 'fin_cost', 'fin_ebay', 
     normalization = 'standard' ##'relative'#'uniform'# 'standard' # 'None'
-    pred_len = 2
-    seq_len = 16
+    pred_len = 5
+    seq_len = 512
     batch_size = 32
     preprocess_type ='None'#'fft'#'decompose'#'None'
     eda = True
-    model_type = 'var'#'ETS'#'GPT2like_transformer'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
+    model_type = 'rnn'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
     epoch = 100
     lr = 0.0001
     phase = 'train'  # 'train' or 'test
@@ -30,9 +32,9 @@ def main():
     w_augment = {'w_jit': 0, 'w_crop':0, 
                  'w_mag_warp':0, 'w_time_warp':0, 
                  'w_rotation':0, 'w_rand_perm':0,
-                 'w_mbb' : 1, 'w_dbn': 1}
+                 'w_mbb' : 0, 'w_dbn': 0}
     iter = 5
-    plot_res = False # If True, plots the results of the evaluation
+    plot_res = True # If True, plots the results of the evaluation
     criterion = 'mse' # 'smape', 'mse', 'mae', 'mape' # Loss function to use, can be 'mse', 'mae', 'smape', or 'mape'
     print(f"Running with dataset: {dataset_name},\n model: {model_type},\n preprocess: {preprocess_type}, \n normalization: {normalization},\n sequence length: {seq_len}, \n prediction length: {pred_len},\n batch size: {batch_size}, \n learning rate: {lr},\n phase: {phase}")
     ####################################################################################
@@ -54,7 +56,7 @@ def main():
     chkpnt_path = f'training_results/{dataset_name}_{model_type}_preprocess_{preprocess_type}_normalization_{normalization}_seq_len_{seq_len}_pred_len_{pred_len}_batch_size_{batch_size}_lr_{lr}.pth'  # Ensure the checkpoint path has the correct extension
     print(f"Model {model_type} loaded successfully with input dimension {input_dim}.")
     ##########################################################################################
-    if model_type != 'var':
+    if model_type not in {'var', 'ets'} :
         
         # Train model
         if phase == 'train':
@@ -101,21 +103,37 @@ def main():
                         target_index, preprocess_type, plot_res,  num_samples=3, device='cpu')
     else:
         preds, gts = model.forward(train1, test1, normalization, target_index)
+        if len(preds.shape) == 2:
+            preds = np.expand_dims(preds, axis = 2)
+        if len(gts.shape) == 2:
+            gts = np.expand_dims(gts, axis = 2)
+        if plot_res == True:
+            
+            # for i in range(7):
+            #     plt.figure()
+            #     plt.plot(range(preds.shape[1]),preds[i, :,0],'-.r', gts[i, :,0] , '-.b')
+            plt.figure()
+            plt.plot(range(preds.shape[0]), preds[:,0,0], gts[:,0,0])
+            plt.grid()
+            
+
         # Evaluate
-        metrics = []
-        for k in range(preds.shape[0]):
-            metrics.append(evaluate_forecast(gts[k], preds[k]))
+        metrics = evaluate_forecast(gts[:, 0,0], preds[:,0,0])
+        # metrics = [metrics]
+        # for k in range(preds.shape[0]):
+            # metrics.append(evaluate_forecast(gts[k], preds[k]))
         # Initialize sum dictionary
-        sum_metrics = defaultdict(float)
-        for m in metrics:
-            for key, value in m.items():
-                sum_metrics[ key] += value
-        # Compute averages
-        n = len(metrics)
-        avg_metrics = {key: val / n for key, val in sum_metrics.items()}
+        # sum_metrics = defaultdict(float)
+        # for m in metrics:
+        #     for key, value in m.items():
+        #         sum_metrics[ key] += value
+        # # Compute averages
+        # n = len(metrics)
+        # avg_metrics = {key: val / n for key, val in sum_metrics.items()}
 
-        print(avg_metrics)
-
+        # print(avg_metrics)
+        print(metrics)
+        plt.show()
 
 if __name__ == '__main__':
     main()
