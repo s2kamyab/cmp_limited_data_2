@@ -368,8 +368,10 @@ def load_model(model_type, input_dim, output_dim, seq_len, pred_len, lr=0.0001):
         raise ValueError(f"Model type '{model_type}' is not recognized.")
     # Define loss function and optimizer
     # criterion = nn.MSELoss()
-    if model_type not in{'var', 'ets'} :
+    if model_type not in ['var', 'ets'] :
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)  # Adjust learning rate as needed
+        total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"Total trainable parameters: {total_params}")
     else:
          optimizer = []
     

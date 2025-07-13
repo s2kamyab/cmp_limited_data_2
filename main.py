@@ -9,6 +9,7 @@ from utils.evaluation import evaluate_forecast
 from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
+
 # from utils.augmentation import *
 
 
@@ -19,16 +20,16 @@ def main():
 #  'fin_aal', 'fin_aapl', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt', 'fin_amzn', 'fin_baba',
 # 'fin_brkb', 'fin_cost', 'fin_ebay', 
     normalization = 'standard' ##'relative'#'uniform'# 'standard' # 'None'
-    pred_len = 5
-    seq_len = 512
+    pred_len = 4
+    seq_len = 16
     batch_size = 32
     preprocess_type ='None'#'fft'#'decompose'#'None'
     eda = True
-    model_type = 'rnn'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
+    model_type = 'GPT2like_transformer'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
     epoch = 100
     lr = 0.0001
     phase = 'train'  # 'train' or 'test
-    use_sentiment = 2# 0 --> no sentiment, int --> lagged version of sentiment
+    use_sentiment = 0# 0 --> no sentiment, int --> lagged version of sentiment
     w_augment = {'w_jit': 0, 'w_crop':0, 
                  'w_mag_warp':0, 'w_time_warp':0, 
                  'w_rotation':0, 'w_rand_perm':0,

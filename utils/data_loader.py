@@ -479,7 +479,7 @@ def load_data(dataset,
         target_index = df.columns.to_list().index('OT')    
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
-    elif dataset == 'fin_aal':
+    elif dataset == 'fin_aal' or dataset == 'aal.csv':
         df = pd.read_csv(r'data\\aal.csv')
         
         df['time_step'] = range(len(df))
@@ -502,7 +502,7 @@ def load_data(dataset,
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
 
-    elif dataset == 'fin_aapl':
+    elif dataset == 'fin_aapl' or dataset == 'AAPL.csv':
         df = pd.read_csv(r'data\\AAPL.csv')
         # df = df.loc[:,['Date', 'Close', 'Volume', 'Scaled_sentiment']]
         df['time_step'] = range(len(df))
@@ -524,7 +524,7 @@ def load_data(dataset,
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
-    elif dataset == 'fin_abbv':
+    elif dataset == 'fin_abbv' or dataset == 'ABBV.csv':
         df = pd.read_csv(r'data\\ABBV.csv')
         
         df['time_step'] = range(len(df))
@@ -545,7 +545,7 @@ def load_data(dataset,
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
-    elif dataset == 'fin_amd':
+    elif dataset == 'fin_amd' or dataset == 'AMD.csv':
         df = pd.read_csv(r'data\\AMD.csv')
         target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
@@ -566,7 +566,7 @@ def load_data(dataset,
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
-    elif dataset == 'fin_ko':
+    elif dataset == 'fin_ko' or dataset == 'KO.csv':
         df = pd.read_csv(r'data\\KO.csv')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
@@ -585,7 +585,7 @@ def load_data(dataset,
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
-    elif dataset == 'fin_TSM':
+    elif dataset == 'fin_TSM'or dataset == 'TSM.csv':
         df = pd.read_csv(r'data\\TSM.csv')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
@@ -604,7 +604,7 @@ def load_data(dataset,
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
-    elif dataset == 'goog':
+    elif dataset == 'goog' or dataset == 'GOOG.csv':
         df = pd.read_csv(r'data\\GOOG.csv')
         df['time_step'] = range(len(df))
         df = df.drop('Date', axis=1)
@@ -622,7 +622,7 @@ def load_data(dataset,
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
-    elif dataset == 'fin_wmt':
+    elif dataset == 'fin_wmt' or dataset == 'WMT.csv':
         df = pd.read_csv(r'data\\WMT.csv')
         # target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
@@ -638,7 +638,7 @@ def load_data(dataset,
         columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
-    elif dataset == 'fin_amzn':
+    elif dataset == 'fin_amzn' or dataset == 'AMZN.csv':
         df = pd.read_csv(r'data\\AMZN.csv')
         # target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
@@ -654,7 +654,7 @@ def load_data(dataset,
         columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
-    elif dataset == 'fin_baba':
+    elif dataset == 'fin_baba' or dataset == 'BABA.csv':
         df = pd.read_csv(r'data\\BABA.csv')
         # target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
@@ -670,7 +670,7 @@ def load_data(dataset,
         columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
-    elif dataset == 'fin_brkb':
+    elif dataset == 'fin_brkb' or dataset == 'BRK-B.csv':
         df = pd.read_csv(r'data\\BRK-B.csv')
         # target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
@@ -686,7 +686,7 @@ def load_data(dataset,
         columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
-    elif dataset == 'fin_cost':
+    elif dataset == 'fin_cost' or dataset == 'COST.csv':
         df = pd.read_csv(r'data\\COST.csv')
         # target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
@@ -702,7 +702,7 @@ def load_data(dataset,
         columns_to_normalize = [df.columns.get_loc(col) for col in include_cols] 
         target_index = df.columns.to_list().index('Close')
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
-    elif dataset == 'fin_ebay':
+    elif dataset == 'fin_ebay' or dataset == 'ebay.csv':
         df = pd.read_csv(r'data\\ebay.csv')
         # target_index = df.columns.to_list().index('Close')
         df['time_step'] = range(len(df))
