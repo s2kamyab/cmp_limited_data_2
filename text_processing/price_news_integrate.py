@@ -160,9 +160,9 @@ def start_inte(stock_price_folder_path, news_folder_path, saving_path, sentiment
 
 
 if __name__ == "__main__":
-    stock_price_folder = "C:\\Users\\shima\\Documents\\Postdoc_Uvic\\Paper1\\Data\\Soshianest\\separated_dataset"
+    stock_price_folder = "C:\\Users\\shima\\Documents\\Postdoc_Uvic\\Paper1\\Data\\Soshianest\\data_clarckson"
     news_folder = "C:\\Users\\shima\\Documents\\Postdoc_Uvic\\Paper1\\Data\\Soshianest\\news\\finspd_sentiment_scored_by_textblob_nltk_bert"
-    saving_path = "C:\\Users\\shima\\Documents\\Postdoc_Uvic\\Paper1\\Data\\Soshianest\\news\\finspd_sentiment_price_news_integrate"
+    saving_path = "C:\\Users\\shima\\Documents\\Postdoc_Uvic\\Paper1\\Data\\Soshianest\\news\\clarckson_sentiment_price_news_integrate"
 
     Sentiment_key_name = 'Sentiment_textblob'  # 'Sentiment_gpt' or 'Sentiment_textblob'
 

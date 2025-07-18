@@ -22,34 +22,34 @@ class ETSTimeSeries:
         # self.maxlags = maxlags
 
     def forward(self, train1, test1, normalization, target_index):
+        self.seq_len = int(train1.shape[0])
         history = train1.iloc[-self.seq_len:,:]
-        if normalization == 'standard':
-            x_mean = history.mean(axis=0)#, keepdim=True)  # (N, F)
-            x_std = history.std(axis=0)#, keepdim=True)
-            x_std[x_std == 0] = 1e-8
-            x_norm = (history - np.tile(np.expand_dims(x_mean, axis = 0), [history.shape[0],1])) / np.tile(np.expand_dims(x_std, axis = 0), [history.shape[0],1])
-            # --- Normalize target to same scale (optional but typical) ---
-            # y_norm = (test1.iloc[:, target_index] - np.tile(np.expand_dims(x_mean[ target_index], axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std[ target_index], axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
-            y_norm = (test1 - np.tile(np.expand_dims(x_mean, axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std, axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
-        elif normalization == 'minmax':
-            x_min = history.min(dim=1, keepdim=True)[0]
-            x_min = np.tile(np.expand_dims(x_min[:,  target_index], axis=1), [1,history.shape[1],1] )
-            x_max = history.max(dim=1, keepdim=True)[0]
-            x_max = np.tile(np.expand_dims(x_max[:,  target_index], axis=1), [1,history.shape[1],1] )
-            x_norm = (history - x_min) / (x_max - x_min + 1e-8)
-            # y_norm = (test1.iloc[:, target_index]  - x_min.iloc[:, target_index] ) / (x_max - x_min + 1e-8)
-            y_norm = (test1 - x_min ) / (x_max - x_min + 1e-8)
-        elif normalization == 'relative':
-            ref = history.iloc[-1, :]  # last time step
-            ref[ref == 0] = 1e-8
-            x_norm = history / np.tile(np.expand_dims(ref,axis=0),[history.shape[0],1])  # assuming x relates to 1st feature
-            # y_norm = test1.iloc[:,target_index] / np.tile(np.expand_dims(ref.iloc[target_index], axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
-            y_norm = test1 / np.tile(np.expand_dims(ref, axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
-        history = x_norm#pd.DataFrame(x_norm, columns = train1.columns)
         prediction = []
         gt = []
         for step in range(50):#len(test1)):
-            # model = SimpleExpSmoothing(np.asarray(history.iloc[:, target_index].values))#, freq='d')
+            if normalization == 'standard':
+                x_mean = history.mean(axis=0)#, keepdim=True)  # (N, F)
+                x_std = history.std(axis=0)#, keepdim=True)
+                x_std[x_std == 0] = 1e-8
+                x_norm = (history - x_mean) / x_std
+                # --- Normalize target to same scale (optional but typical) ---
+                # y_norm = (test1.iloc[:, target_index] - np.tile(np.expand_dims(x_mean[ target_index], axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std[ target_index], axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
+                y_norm = (test1 - np.tile(np.expand_dims(x_mean, axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std, axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
+            elif normalization == 'minmax':
+                x_min = history.min(axis=0)#dim=1, keepdim=True)[0]
+                x_min = np.tile(np.expand_dims(x_min[:,  target_index], axis=1), [1,history.shape[1],1] )
+                x_max = history.max(axis=0)#(dim=1, keepdim=True)[0]
+                x_max = np.tile(np.expand_dims(x_max[:,  target_index], axis=1), [1,history.shape[1],1] )
+                x_norm = (history - x_min) / (x_max - x_min + 1e-8)
+                # y_norm = (test1.iloc[:, target_index]  - x_min.iloc[:, target_index] ) / (x_max - x_min + 1e-8)
+                y_norm = (test1 - x_min ) / (x_max - x_min + 1e-8)
+            elif normalization == 'relative':
+                ref = history.iloc[-1, :]  # last time step
+                ref[ref == 0] = 1e-8
+                x_norm = history / np.tile(np.expand_dims(ref,axis=0),[history.shape[0],1])  # assuming x relates to 1st feature
+                # y_norm = test1.iloc[:,target_index] / np.tile(np.expand_dims(ref.iloc[target_index], axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
+                y_norm = test1 / np.tile(np.expand_dims(ref, axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
+            history = x_norm
             model = Holt(np.asarray(history.iloc[:, target_index].values))
             model_fit = model.fit()
             # make prediction on validation
@@ -58,16 +58,27 @@ class ETSTimeSeries:
             prediction.append(tt)#[:, target_index])
             gt.append(y_norm.iloc[step:step+self.pred_len,target_index].values)
             ########################### Update train  history#################################
-            # move the training window
-            # print(train.values.shape, train.index.shape)
-            hist = history.values#[x for x in train]
+            hist = train1.iloc[-self.seq_len:,:]
+            # hist_index = history.index#[(-training_window):]
+            # print(hist.index)
             for i in range(step+1):
 
-                obs = y_norm.iloc[i,:].values
+                # obs = y_norm.iloc[i,:].values
+                obs = test1.iloc[i,:].values
+                # if normalization == 'standard':
+                #     obs = (obs - x_mean) / (x_std + 1e-8)
+                # elif normalization == 'minmax':
+                #     obs = (obs - x_min) / (x_max - x_min + 1e-8)  
+                # elif normalization == 'relative':
+                #     obs = obs / ref   
                 obs = np.expand_dims(obs , axis=0)
+                
                 hist= np.concatenate((hist, obs), axis=0)#append(obs)
                 hist = hist[1:]
 
+                # hist_index = pd.DatetimeIndex(np.append(hist_index, pd.to_datetime(test1.index[i])))
+
+                # hist_index = hist_index[1:]
             history = pd.DataFrame(data=np.array(hist), columns = train1.columns)#, index = hist_index)
 
         return np.array(prediction), np.array(gt)
@@ -87,50 +98,62 @@ class VARTimeSeries:
         # self.maxlags = maxlags
 
     def forward(self, train1, test1, normalization, target_index):
+        self.seq_len = int(train1.shape[0])
         history = train1.iloc[-self.seq_len:,:]
-        if normalization == 'standard':
-            x_mean = history.mean(axis=0)#, keepdim=True)  # (N, F)
-            x_std = history.std(axis=0)#, keepdim=True)
-            x_std[x_std == 0] = 1e-8
-            x_norm = (history - x_mean) / x_std
-            # --- Normalize target to same scale (optional but typical) ---
-            # y_norm = (test1.iloc[:, target_index] - np.tile(np.expand_dims(x_mean[ target_index], axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std[ target_index], axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
-            y_norm = (test1 - np.tile(np.expand_dims(x_mean, axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std, axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
-        elif normalization == 'minmax':
-            x_min = history.min(dim=1, keepdim=True)[0]
-            x_min = np.tile(np.expand_dims(x_min[:,  target_index], axis=1), [1,history.shape[1],1] )
-            x_max = history.max(dim=1, keepdim=True)[0]
-            x_max = np.tile(np.expand_dims(x_max[:,  target_index], axis=1), [1,history.shape[1],1] )
-            x_norm = (history - x_min) / (x_max - x_min + 1e-8)
-            # y_norm = (test1.iloc[:, target_index]  - x_min.iloc[:, target_index] ) / (x_max - x_min + 1e-8)
-            y_norm = (test1 - x_min ) / (x_max - x_min + 1e-8)
-        elif normalization == 'relative':
-            ref = history.iloc[-1, :]  # last time step
-            ref[ref == 0] = 1e-8
-            x_norm = history / np.tile(np.expand_dims(ref,axis=0),[history.shape[0],1])  # assuming x relates to 1st feature
-            # y_norm = test1.iloc[:,target_index] / np.tile(np.expand_dims(ref.iloc[target_index], axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
-            y_norm = test1 / np.tile(np.expand_dims(ref, axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
-        history = x_norm#pd.DataFrame(x_norm, columns = train1.columns)
         prediction = []
         gt = []
         for step in range(50):#len(test1)):
+            if normalization == 'standard':
+                x_mean = history.mean(axis=0)#, keepdim=True)  # (N, F)
+                x_std = history.std(axis=0)#, keepdim=True)
+                x_std[x_std == 0] = 1e-8
+                x_norm = (history - x_mean) / x_std
+                # --- Normalize target to same scale (optional but typical) ---
+                # y_norm = (test1.iloc[:, target_index] - np.tile(np.expand_dims(x_mean[ target_index], axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std[ target_index], axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
+                y_norm = (test1 - np.tile(np.expand_dims(x_mean, axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std, axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
+            elif normalization == 'minmax':
+                x_min = history.min(axis=0)#dim=1, keepdim=True)[0]
+                x_min = np.tile(np.expand_dims(x_min[:,  target_index], axis=1), [1,history.shape[1],1] )
+                x_max = history.max(axis=0)#(dim=1, keepdim=True)[0]
+                x_max = np.tile(np.expand_dims(x_max[:,  target_index], axis=1), [1,history.shape[1],1] )
+                x_norm = (history - x_min) / (x_max - x_min + 1e-8)
+                # y_norm = (test1.iloc[:, target_index]  - x_min.iloc[:, target_index] ) / (x_max - x_min + 1e-8)
+                y_norm = (test1 - x_min ) / (x_max - x_min + 1e-8)
+            elif normalization == 'relative':
+                ref = history.iloc[-1, :]  # last time step
+                ref[ref == 0] = 1e-8
+                x_norm = history / np.tile(np.expand_dims(ref,axis=0),[history.shape[0],1])  # assuming x relates to 1st feature
+                # y_norm = test1.iloc[:,target_index] / np.tile(np.expand_dims(ref.iloc[target_index], axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
+                y_norm = test1 / np.tile(np.expand_dims(ref, axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
+            history = x_norm
             model = VAR(endog=history)#, freq='d')
             model_fit = model.fit()
             # make prediction on validation
             tt = model_fit.forecast(model_fit.endog, steps=self.pred_len)
-            tt[abs(tt)>4]=0
+            # tt[abs(tt)>4]=0
             prediction.append(tt[:, target_index])
             gt.append(y_norm.iloc[step:step+self.pred_len,target_index].values)
+            print(tt[:, target_index])
+            print(y_norm.iloc[step:step+self.pred_len,target_index].values)
             ########################### Update train  history#################################
             # move the training window
             # print(train.values.shape, train.index.shape)
-            hist = history.values#[x for x in train]
+            # hist = history.values#[x for x in train]
+            hist = train1.iloc[-self.seq_len:,:]
             # hist_index = history.index#[(-training_window):]
             # print(hist.index)
             for i in range(step+1):
 
-                obs = y_norm.iloc[i,:].values
+                # obs = y_norm.iloc[i,:].values
+                obs = test1.iloc[i,:].values
+                # if normalization == 'standard':
+                #     obs = (obs - x_mean) / (x_std + 1e-8)
+                # elif normalization == 'minmax':
+                #     obs = (obs - x_min) / (x_max - x_min + 1e-8)  
+                # elif normalization == 'relative':
+                #     obs = obs / ref   
                 obs = np.expand_dims(obs , axis=0)
+                
                 hist= np.concatenate((hist, obs), axis=0)#append(obs)
                 hist = hist[1:]
 
@@ -139,32 +162,6 @@ class VARTimeSeries:
                 # hist_index = hist_index[1:]
             history = pd.DataFrame(data=np.array(hist), columns = train1.columns)#, index = hist_index)
 
-
-            ###############################################################################
-            ###############################################################################
-
-                    # """
-        # Forward pass to generate forecasts.
-
-        # Args:
-        #     x (np.ndarray): Input of shape (batch_size, seq_len, features)
-
-        # Returns:
-        #     np.ndarray: Forecasts of shape (batch_size, pred_len, features)
-        # """
-        # N, n_feat = x.shape
-        # preds = np.zeros((self.pred_len, n_feat))
-
-        # # for i in range(N):
-        # try:
-        #     series_df = np.array(x.values)#[i]
-        #     model = VAR(series_df)
-        #     model_fit = model.fit(maxlags=self.maxlags, ic='aic')
-        #     forecast = model_fit.forecast(y=series_df, steps=self.pred_len)
-        #     preds = forecast
-        # except Exception as e:
-        #     print(f"Error in sample : {e}")
-        #     preds = np.nan
         return np.array(prediction), np.array(gt)
     
 

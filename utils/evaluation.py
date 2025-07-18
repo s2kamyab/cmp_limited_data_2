@@ -4,21 +4,21 @@ import torch
 from data_loader import normalise_selected_columns
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 def smape(y_true, y_pred):
-    eps=0.1
+    eps=1e-1
     denominator = (np.abs(y_true) + np.abs(y_pred)) / 2
     # Avoid divide-by-zero
-    denominator = np.where(denominator == 0, 1e-8, denominator)
+    # denominator = np.where(denominator == 0, 1e-8, denominator)
     mask = denominator > eps  # avoid division by small number
-    smape = np.mean(np.abs(y_pred[mask] - y_true[mask]) / denominator[mask]) * 100
+    smape = np.mean(np.abs(y_pred[mask] - y_true[mask]) / (denominator[mask] )) * 100
     return smape#np.mean(np.abs(y_pred - y_true) / denominator) * 100
 
 def mape(y_true, y_pred):
     # Avoid divide-by-zero
     eps=0.1
     
-    y_true = np.where(y_true == 0, 1e-8, y_true)
-    mask = y_true > eps 
-    return np.mean(np.abs((y_true [mask] - y_pred[mask]) / y_true[mask])) * 100
+    # y_true = np.where(y_true == 0, 1e-8, y_true)
+    mask = y_true > eps
+    return np.mean(np.abs((y_true[mask] - y_pred[mask]) / (y_true[mask] + 1e-8))) * 100
 
 def evaluate_forecast(y_true, y_pred):
     metrics = {
