@@ -98,7 +98,7 @@ class VARTimeSeries:
         # self.maxlags = maxlags
 
     def forward(self, train1, test1, normalization, target_index):
-        self.seq_len = int(train1.shape[0])
+        self.seq_len = int(train1.shape[0]/3)
         history = train1.iloc[-self.seq_len:,:]
         prediction = []
         gt = []
@@ -126,7 +126,7 @@ class VARTimeSeries:
                 # y_norm = test1.iloc[:,target_index] / np.tile(np.expand_dims(ref.iloc[target_index], axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
                 y_norm = test1 / np.tile(np.expand_dims(ref, axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
             history = x_norm
-            model = VAR(endog=history)#, freq='d')
+            model = VAR(endog=history)#).iloc[:, target_index])#, freq='d')
             model_fit = model.fit()
             # make prediction on validation
             tt = model_fit.forecast(model_fit.endog, steps=self.pred_len)

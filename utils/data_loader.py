@@ -440,16 +440,18 @@ def load_data(dataset,
 
         df['time_step'] = range(len(df))
         # df = df.drop('date', axis=1)
-        columns_to_normalize = range(len(df.columns))
+        
         # columns_to_normalize = [columns_to_normalize[:-2]] # exclude sentiment column
         if use_sentiment == 0:
             df = df.drop('Sentiment_textblob', axis=1)
         else:
             df['Sentiment_textblob'] = df['Sentiment_textblob'].shift(use_sentiment).fillna(0)
-        target_index = df.columns.to_list().index('95900') 
+        
         df = df.drop('42930', axis=1)
         df = df.drop('47353', axis=1)
         df = df.drop('541976', axis=1)
+        target_index = df.columns.to_list().index('95900') 
+        columns_to_normalize = range(len(df.columns))
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
     elif dataset == 'clarckson_42930':
         df = pd.read_csv(r'data_clarckson\\20250708_VLCC_after_MCV.csv')
@@ -462,43 +464,48 @@ def load_data(dataset,
             df = df.drop('Sentiment_textblob', axis=1)
         else:
             df['Sentiment_textblob'] = df['Sentiment_textblob'].shift(use_sentiment).fillna(0)
-        target_index = df.columns.to_list().index('42930') 
+        
         df = df.drop('95900', axis=1)
         df = df.drop('47353', axis=1)
         df = df.drop('541976', axis=1)
+        target_index = df.columns.to_list().index('42930') 
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
     elif dataset == 'clarckson_541976':
         df = pd.read_csv(r'data_clarckson\\20250708_VLCC_after_MCV.csv')
 
         df['time_step'] = range(len(df))
         # df = df.drop('date', axis=1)
-        columns_to_normalize = range(len(df.columns))
+        
         # columns_to_normalize = [columns_to_normalize[:-2]] # exclude sentiment column
         if use_sentiment == 0:
             df = df.drop('Sentiment_textblob', axis=1)
         else:
             df['Sentiment_textblob'] = df['Sentiment_textblob'].shift(use_sentiment).fillna(0)
-        target_index = df.columns.to_list().index('541976') 
+        
         df = df.drop('95900', axis=1)
         df = df.drop('47353', axis=1)
         df = df.drop('42930', axis=1)
+        target_index = df.columns.to_list().index('541976') 
+        columns_to_normalize = range(len(df.columns))
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
     elif dataset == 'clarckson_47353':
         df = pd.read_csv(r'data_clarckson\\20250708_VLCC_after_MCV.csv')
 
         df['time_step'] = range(len(df))
         # df = df.drop('date', axis=1)
-        columns_to_normalize = range(len(df.columns))
+        
         # columns_to_normalize = [columns_to_normalize[:-2]] # exclude sentiment column
         if use_sentiment == 0:
             df = df.drop('Sentiment_textblob', axis=1)
         else:
             df['Sentiment_textblob'] = df['Sentiment_textblob'].shift(use_sentiment).fillna(0)
-        target_index = df.columns.to_list().index('47353') 
+        
         df = df.drop('95900', axis=1)
         df = df.drop('541976', axis=1)
         df = df.drop('42930', axis=1)
+        target_index = df.columns.to_list().index('47353') 
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
+        columns_to_normalize = range(len(df.columns))
     # elif dataset == 'soshianest_530486':
     #     df = pd.read_csv(r'data\\530486_dataset.csv')
         

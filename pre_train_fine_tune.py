@@ -107,12 +107,12 @@ def main():
 # 'fin_brkb', 'fin_cost', 'fin_ebay', 'clarckson_47353'
     
     normalization = 'standard' ##'relative'#'uniform'# 'standard' # 'None'
-    pred_len = 4
+    pred_len = 1
     seq_len = 16
     batch_size = 32
     preprocess_type ='None'#'fft'#'decompose'#'None'
     eda = True
-    model_type = 'GPT2like_transformer'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
+    model_type = 'times_net'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
     epoch = 100
     lr = 0.00001
     phase = 'train'  # 'train' or 'test
@@ -188,7 +188,7 @@ def main():
                                                     device='cpu', 
                                                     load_checkpoint=False)
         # Freeze the first N layers
-        N = 1 if model_type == 'times_net' else 3
+        N = 1 if model_type in ['times_net', 'clarckson_47353'] else 3
         layer_count = 0
 
         for name, child in model.named_children():

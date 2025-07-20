@@ -16,16 +16,16 @@ import numpy as np
 
 def main():
     # Framework Settings
-    dataset_name = 'clarckson_47353'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
+    dataset_name = 'clarckson_541976'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
 #  'fin_aal', 'fin_aapl', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt', 'fin_amzn', 'fin_baba',
 # 'fin_brkb', 'fin_cost', 'fin_ebay', 'clarckson_47353', 'clarckson_541976', 'clarckson_42930', 'clarckson_95900'
     normalization = 'standard' ##'relative'#'uniform'# 'standard' # 'None'
-    pred_len = 4
+    pred_len = 1
     seq_len = 16
     batch_size = 32
     preprocess_type ='None'#'fft'#'decompose'#'None'
     eda = True
-    model_type = 'GPT2like_transformer'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
+    model_type = 'rnn'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
 
     epoch = 100
     lr = 0.00001
@@ -36,7 +36,7 @@ def main():
                  'w_rotation':0, 'w_rand_perm':0,
                  'w_mbb' : 0, 'w_dbn': 0}
     iter = 5
-    plot_res = False # If True, plots the results of the evaluation
+    plot_res = False# If True, plots the results of the evaluation
     criterion = 'mse' # 'smape', 'mse', 'mae', 'mape' # Loss function to use, can be 'mse', 'mae', 'smape', or 'mape'
     print(f"Running with dataset: {dataset_name},\n model: {model_type},\n preprocess: {preprocess_type}, \n normalization: {normalization},\n sequence length: {seq_len}, \n prediction length: {pred_len},\n batch size: {batch_size}, \n learning rate: {lr},\n phase: {phase}")
     ####################################################################################
@@ -120,7 +120,7 @@ def main():
             
 
         # Evaluate
-        metrics = evaluate_forecast(gts[:, 0,0], preds[:,0,0])
+        metrics = evaluate_forecast(gts[:,0,0], preds[:,0,0])
         # metrics = [metrics]
         # for k in range(preds.shape[0]):
             # metrics.append(evaluate_forecast(gts[k], preds[k]))

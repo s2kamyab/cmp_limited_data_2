@@ -150,7 +150,7 @@ def train_model(model,
                 x_norm = (x - x_mean) / x_std
 
                 # --- Normalize target to same scale (optional but typical) ---
-                y_norm = (y - x_mean[:, :, target_index]) / x_std[:, :, target_index]  # Assuming y relates to 1st feature
+                y_norm = (y - x_mean[:, :, target_index]) /  x_std[:, :, target_index] # Assuming y relates to 1st feature
             elif normalization == 'minmax':
                 x_min = x.min(dim=1, keepdim=True)[0]
                 x_min = torch.tile(torch.unsqueeze(x_min[:,  target_index], dim=1), [1,y.shape[1],1] )
@@ -323,7 +323,8 @@ def train_model(model,
                 #         output = output.sum(dim=2)  # sum over the last dimension
                 #         y = y.sum(dim=2)  # sum over the last dimension
 
-                val_loss += criterion(torch.squeeze(output_norm), torch.squeeze(y_norm))#torch.mean(weights * (model_residual(x) - y)**2)
+                val_loss += criterion(torch.squeeze(output_norm), torch.squeeze(y_norm))
+                # print(val_loss)#torch.mean(weights * (model_residual(x) - y)**2)
 
                 # x, y = x.to(device), y.to(device)    
                 # val_loss += criterion(torch.squeeze(model(x)), torch.squeeze(y)).item()
