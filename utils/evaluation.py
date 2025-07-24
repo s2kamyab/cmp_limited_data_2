@@ -34,6 +34,7 @@ def plot_sample_predictions(model,
                             common_cols, 
                             pred_len, 
                             test_loader_actual, 
+                            test_loader,
                             normalization,
                             columns_to_normalize, 
                             target_index, 
@@ -46,8 +47,11 @@ def plot_sample_predictions(model,
        
         for i in range(5):#len(y) ):
             x, y = next(iter(test_loader_actual))
+            x2, y2 = next(iter(test_loader))
             x = x.to(device).numpy()
             y = y.to(device).numpy()
+            x2 = x2.to(device).numpy()
+            y2 = y2.to(device).numpy()
             if preprocess == 'decomposed':
                 target_index1 = common_cols.index('trend')
                 # target_index2 = common_cols.index('residual')
@@ -88,7 +92,8 @@ def plot_sample_predictions(model,
             pred = model(torch.unsqueeze(torch.tensor(normalized).float(), dim=0))
 
             pred = pred.squeeze()
-
+            if len(pred.shape) == 0:
+                pred = torch.unsqueeze(pred, dim=0)
             if len(pred.shape) == 1:
                 pred = torch.unsqueeze(pred, dim=1) 
 
@@ -118,8 +123,8 @@ def plot_sample_predictions(model,
             if len(y_pred_total.shape) == 1:
                 y_pred_total = np.expand_dims(y_pred_total, axis=1)
             # target_index = common_cols.index('OT')
-            x_batch_total =  x[i].copy() 
-            y_gt_total = np.sum(y[i,:,:], axis=1)#y[i,:,0] + y[i,:,1] + y[i,:, 2]
+            x_batch_total =  x2[i].copy() 
+            y_gt_total = np.sum(y2[i,:,:], axis=1)#y[i,:,0] + y[i,:,1] + y[i,:, 2]
             if len(y_gt_total.shape) == 1:
                 y_gt_total = np.expand_dims(y_gt_total, axis=1)
 
@@ -249,6 +254,7 @@ def evaluate_model(model,
                                 common_cols, 
                                 pred_len, 
                                 test_loader_actual, 
+                                test_loader,
                                 normalization, 
                                 column_to_normalize, 
                                 target_index, 

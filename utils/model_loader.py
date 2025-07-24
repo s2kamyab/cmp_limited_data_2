@@ -6,7 +6,208 @@ from utils.tst import Transformer
 from statsmodels.tsa.api import VAR
 import pandas as pd
 from statsmodels.tsa.holtwinters import SimpleExpSmoothing, Holt
+from transformers import GPT2Model, GPT2Config
+from transformers import InformerForPrediction, InformerConfig
+from transformers import AutoformerForPrediction, AutoformerConfig
+def autocorrelation(query_states, key_states):
+    """
+    Computes autocorrelation(Q,K) using `torch.fft`. 
+    Think about it as a replacement for the QK^T in the self-attention.
+    
+    Assumption: states are resized to same shape of [batch_size, time_length, embedding_dim].
+    """
+    query_states_fft = torch.fft.rfft(query_states, dim=1)
+    key_states_fft = torch.fft.rfft(key_states, dim=1)
+    attn_weights = query_states_fft * torch.conj(key_states_fft)
+    attn_weights = torch.fft.irfft(attn_weights, dim=1)  
+    
+    return attn_weights
+class DecompositionLayer(nn.Module):
+    """
+    Returns the trend and the seasonal parts of the time series.
+    """
 
+    def __init__(self, kernel_size):
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.avg = nn.AvgPool1d(kernel_size=kernel_size, stride=1, padding=0) # moving average 
+
+    def forward(self, x):
+        """Input shape: Batch x Time x EMBED_DIM"""
+        # padding on the both ends of time series
+        num_of_pads = (self.kernel_size - 1) // 2
+        front = x[:, 0:1, :].repeat(1, num_of_pads, 1)
+        end = x[:, -1:, :].repeat(1, num_of_pads, 1)
+        x_padded = torch.cat([front, x, end], dim=1)
+
+        # calculate the trend and seasonal part of the series
+        x_trend = self.avg(x_padded.permute(0, 2, 1)).permute(0, 2, 1)
+        x_seasonal = x - x_trend
+        return x_seasonal, x_trend
+class InformerTimeSeriesModel(nn.Module):
+    def __init__(self, input_dim, pred_len, output_dim, seq_len=96, label_len=48, d_model=512):
+        super(InformerTimeSeriesModel, self).__init__()
+        self.pred_len = pred_len
+        self.seq_len = seq_len
+        self.label_len = label_len
+
+        config = InformerConfig(
+            prediction_length=pred_len,
+            context_length=seq_len,
+            label_length=label_len,
+            input_size=input_dim,
+            d_model=d_model,
+            target_size=output_dim
+        )
+        self.model = InformerForPrediction(config)
+
+    def forward(self, x):
+        """
+        x: (batch_size, seq_len, input_dim)
+        Returns:
+            (batch_size, pred_len, output_dim)
+        """
+        inputs = {
+            "past_values": x,
+            'past_observed_mask': torch.ones(x.size(0), self.seq_len, dtype=torch.bool).to(x.device),
+            "past_time_features": torch.zeros_like(x),
+            "future_time_features": torch.zeros(x.size(0), self.pred_len, x.size(2)).to(x.device),
+        }
+        out = self.model(**inputs)
+        return out.predictions  # (batch, pred_len, output_dim)
+    
+class AutoformerTimeSeriesModel(nn.Module):
+    def __init__(self, input_dim, pred_len, output_dim, seq_len,  d_model=512):
+        super(AutoformerTimeSeriesModel, self).__init__()
+        self.pred_len = pred_len
+        self.seq_len = seq_len
+        # self.label_len = label_len
+        self.label_len = int(seq_len//2)
+
+        config = AutoformerConfig(
+            prediction_length=pred_len,
+            context_length=seq_len,
+            label_length=self.label_len,
+            input_size=input_dim,
+            d_model=d_model,
+            target_size=output_dim
+        )
+        self.model = AutoformerForPrediction(config)
+
+    def forward(self, x):
+        """
+        x: (batch_size, seq_len, input_dim)
+        Returns:
+            (batch_size, pred_len, output_dim)
+        """
+        inputs = {
+            "past_values": x,
+            'past_observed_mask': torch.ones(x.size(0), self.seq_len, dtype=torch.bool).to(x.device),
+            "past_time_features": torch.zeros_like(x),
+            "future_time_features": torch.zeros(x.size(0), self.pred_len, x.size(2)).to(x.device),
+        }
+        out = self.model(**inputs)
+        return out.predictions  # (batch, pred_len, output_dim)    
+# from transformers import AutoModelForSequenceClassification, AutoTokenizer
+# from huggingface_hub import login
+# login(token="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")
+# login(token="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")
+# class FinGPTTimeSeriesForecast(nn.Module):
+#     def __init__(self, 
+#                  model_name: str = "FinGPT/FinGPT-Forecaster", 
+#                  input_dim: int = None, 
+#                  pred_len: int = 3, 
+#                  output_dim: int = 1,
+#                  device: str = None):
+#         """
+#         Adapt FinGPT forecaster for numerical time-series.
+        
+#         Args:
+#             model_name: pretrained FinGPT model checkpoint
+#             input_dim: # of features per timestep (optional, for assertion)
+#             pred_len: steps ahead to forecast
+#             output_dim: # of target dimensions
+#         """
+#         super().__init__()
+#         self.pred_len = pred_len
+#         self.output_dim = output_dim
+#         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        
+#         # Load pretrained FinGPT forecasting model
+#         self.model = AutoModelForSequenceClassification.from_pretrained(model_name , token="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")
+#         self.tokenizer = AutoTokenizer.from_pretrained(model_name, token="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")
+#         self.model.to(self.device)
+        
+#         if input_dim and self.model.config.num_labels != (pred_len * output_dim):
+#             raise ValueError("Model pred_len/output_dim doesn't match pretrained checkpoint.")
+        
+#     def forward(self, x: torch.Tensor):
+#         """
+#         x: shape (batch_size, seq_len, input_dim) numeric tensor
+        
+#         Steps:
+#         1. Quantize input to text tokens
+#         2. Tokenize and feed FinGPT
+#         3. Decode logits back into numeric forecasts
+#         """
+#         batch, seq_len, feat = x.shape
+        
+#         # 1. Quantization (example: simple rounding or binning; needs domain-specific tuning)
+#         quant = (x.detach().cpu().numpy() * 100).round().astype(int)
+#         text_sequences = [" ".join(map(str, row.flatten())) for row in quant]
+        
+#         # 2. Tokenize and model inference
+#         encoded = self.tokenizer(text_sequences, padding=True, truncation=True, return_tensors="pt")
+#         encoded = {k: v.to(self.device) for k, v in encoded.items()}
+#         outputs = self.model(**encoded)
+        
+#         # 3. Reshape logits → [batch, pred_len, output_dim]
+#         logits = outputs.logits  # shape: (batch, pred_len*output_dim)
+#         fc_output = logits.view(batch, self.pred_len, self.output_dim)
+        
+#         # Convert to tensor
+#         return torch.sigmoid(fc_output)  # or apply appropriate activation
+class GPT2TimeSeriesModel(nn.Module):
+    def __init__(self, input_dim, pred_len, output_dim, d_model=768):
+        super(GPT2TimeSeriesModel, self).__init__()
+        self.pred_len = pred_len
+        self.input_projection = nn.Linear(input_dim, d_model)
+
+        # Load GPT-2 configuration and model (no embedding layer, we handle it ourselves)
+        config = GPT2Config(
+            n_embd=d_model,
+            n_layer=6,
+            n_head=8,
+            n_positions=1024,
+            n_ctx=1024,
+            resid_pdrop=0.1,
+            embd_pdrop=0.1,
+            attn_pdrop=0.1
+        )
+        self.transformer = GPT2Model(config)
+        # Freeze the first 4 layers of GPT-2
+        for i in range(5):
+            for param in self.transformer.h[i].parameters():
+                param.requires_grad = False
+
+        self.output_layer = nn.Linear(d_model, output_dim)
+
+    def forward(self, x):
+        """
+        x: shape (batch_size, seq_len, input_dim)
+        """
+        # Project input to GPT2's expected hidden size
+        x = self.input_projection(x)  # (batch, seq_len, d_model)
+
+        # GPT-2 expects input shape: (batch, seq_len, d_model) → need to pass attention mask optionally
+        outputs = self.transformer(inputs_embeds=x)
+        hidden_states = outputs.last_hidden_state  # shape: (batch, seq_len, d_model)
+
+        # Final linear projection to output_dim
+        out = self.output_layer(hidden_states)  # (batch, seq_len, output_dim)
+
+        # Return only the last pred_len steps
+        return out[:, -self.pred_len:, :]  # shape: (batch, pred_len, output_dim)
 class ETSTimeSeries:
     def __init__(self, pred_len, seq_len):
         """
@@ -360,7 +561,13 @@ def load_model(model_type, input_dim, output_dim, seq_len, pred_len, lr=0.0001):
     elif model_type == 'ets':
         # Initialize VAR model
         model = ETSTimeSeries(seq_len=seq_len, pred_len=pred_len)
-
+    elif model_type == 'pretrained_gpt2':
+        model = GPT2TimeSeriesModel(input_dim, pred_len, output_dim)
+    elif model_type == 'pretrained_autoformer':
+        input_dim, pred_len, output_dim, seq_len
+        model = AutoformerTimeSeriesModel(input_dim, pred_len, output_dim, seq_len)
+    elif model_type == 'pretrained_informer':
+        model = InformerTimeSeriesModel(input_dim=input_dim, pred_len=pred_len, output_dim=output_dim)
     else:
         raise ValueError(f"Model type '{model_type}' is not recognized.")
     # Define loss function and optimizer

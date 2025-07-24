@@ -10,26 +10,33 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 # from utils.augmentation import *
 
 
 
 def main():
     # Framework Settings
-    dataset_name = 'clarckson_541976'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
+    dataset_name = 'fin_aal'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
 #  'fin_aal', 'fin_aapl', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt', 'fin_amzn', 'fin_baba',
 # 'fin_brkb', 'fin_cost', 'fin_ebay', 'clarckson_47353', 'clarckson_541976', 'clarckson_42930', 'clarckson_95900'
+    # dataset_name = 'clarckson_pca_541976'
+    # dataset_name = 'clarckson_pca_95900'  
+    # dataset_name = 'clarckson_pca_42930'
+    # dataset_name = 'clarckson_pca_47353'
     normalization = 'standard' ##'relative'#'uniform'# 'standard' # 'None'
     pred_len = 1
-    seq_len = 16
-    batch_size = 32
+    seq_len = 12
+    batch_size = 12
     preprocess_type ='None'#'fft'#'decompose'#'None'
     eda = True
-    model_type = 'rnn'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
-
+    model_type = 'pretrained_gpt2'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 
+    # 'finspd_transformer', 'lstm', 'times_net', 'pretrained_gpt2', 'pretrained_autoformer', 'pretrained_informer', 'var'
+    # pcs = 1 # Number of principal components to use, 0 means no PCA
     epoch = 100
     lr = 0.00001
     phase = 'train'  # 'train' or 'test
+    
     use_sentiment = 0# 0 --> no sentiment, int --> lagged version of sentiment
     w_augment = {'w_jit': 0, 'w_crop':0, 
                  'w_mag_warp':0, 'w_time_warp':0, 
@@ -48,7 +55,8 @@ def main():
                   columns_to_normalize = load_data(dataset_name, 
                                                    preprocess_type, 
                                                    seq_len, pred_len,batch_size,
-                                                     normalization, use_sentiment, w_augment)
+                                                     normalization, use_sentiment, 
+                                                     w_augment)
     #####################################################################################
     # Explore data
     Explore_data(eda, train_loader, test_loader, preprocess_type, cols, dataset_name, use_sentiment)

@@ -102,7 +102,7 @@ def load_all_except_one(folder_path, exclude_file, preprocess_type,
 
 def main():
     # Framework Settings
-    finetune_dataset_name = 'clarckson_47353'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
+    finetune_dataset_name = 'clarckson_541976'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
 #  'fin_aal', 'fin_aapl', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt', 'fin_amzn', 'fin_baba',
 # 'fin_brkb', 'fin_cost', 'fin_ebay', 'clarckson_47353'
     
@@ -112,7 +112,7 @@ def main():
     batch_size = 32
     preprocess_type ='None'#'fft'#'decompose'#'None'
     eda = True
-    model_type = 'times_net'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
+    model_type = 'lstm'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
     epoch = 100
     lr = 0.00001
     phase = 'train'  # 'train' or 'test
@@ -188,7 +188,7 @@ def main():
                                                     device='cpu', 
                                                     load_checkpoint=False)
         # Freeze the first N layers
-        N = 1 if model_type in ['times_net', 'clarckson_47353'] else 3
+        N = 1 if model_type in ['times_net'] else 3
         layer_count = 0
 
         for name, child in model.named_children():
