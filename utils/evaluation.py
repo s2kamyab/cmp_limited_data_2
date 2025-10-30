@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt 
 import numpy as np
 import torch
-from data_loader import normalise_selected_columns
+from utils.data_loader import normalise_selected_columns
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 def smape(y_true, y_pred):
     eps=1e-1
@@ -9,7 +9,7 @@ def smape(y_true, y_pred):
     # Avoid divide-by-zero
     # denominator = np.where(denominator == 0, 1e-8, denominator)
     mask = denominator > eps  # avoid division by small number
-    smape = np.mean(np.abs(y_pred[mask] - y_true[mask]) / (denominator[mask] )) * 100
+    smape = np.mean(np.abs(y_pred[mask] - y_true[mask]) / (denominator[mask])) * 100
     return smape#np.mean(np.abs(y_pred - y_true) / denominator) * 100
 
 def mape(y_true, y_pred):
@@ -220,13 +220,26 @@ def evaluate_model(model,
             if normalization == 'standard':
                 # means = inputs.mean(dim=1, keepdim=True)
                 # stds = inputs.std(dim=1, keepdim=True).replace(0, 1e-8)
-                outputs = t * stds[:,:,target_index] + means[:,:,target_index]
+                if len(stds[:,:,target_index].shape) == 3:
+                    outputs = t * stds[:,:,target_index] + means[:,:,target_index]
+                else:
+                    outputs = t * stds[:,:,target_index].unsqueeze(2) + means[:,:,target_index].unsqueeze(2)
+
             elif normalization == 'uniform':
                 # mins = inputs.min(dim=1, keepdim=True).values
                 # maxs = inputs.max(dim=1, keepdim=True).values
-                outputs = t * (maxs[:,:,target_index] - mins[:,:,target_index]) + mins[:,:,target_index]
+                if len(maxs[:,:,target_index].shape) == 3:
+                    outputs = t * (maxs[:,:,target_index] - mins[:,:,target_index]) + mins[:,:,target_index]
+                else:
+                    outputs = t * (maxs[:,:,target_index] - mins[:,:,target_index]).unsqueeze(2) + mins[:,:,target_index].unsqueeze(2)
             elif normalization == 'relative':
-                outputs = t * torch.tile(inputs[:, -1, target_index].unsqueeze(1) , [1,pred_len,1])
+                if len(inputs[:,:,target_index].shape) == 3:
+                    denum = inputs[:, -1, target_index]
+                else:
+                    denum = inputs[:, -1, target_index].unsqueeze(1)
+                    denum = denum.unsqueeze(2)
+                # denum = inputs[:, -1, target_index].unsqueeze(1)
+                outputs = t * torch.tile(denum, [1,pred_len,1])
             outputs = outputs.cpu().numpy()
             targets = targets.cpu().numpy()
             if len(outputs.shape) == 3:
@@ -236,8 +249,8 @@ def evaluate_model(model,
             all_targets.append(targets)
 
     # Concatenate all batches
-    y_pred = np.concatenate(all_preds, axis=0).squeeze()
-    y_test = np.concatenate(all_targets, axis=0).squeeze()
+    y_pred = np.concatenate(all_preds[:-2], axis=0).squeeze()
+    y_test = np.concatenate(all_targets[:-2], axis=0).squeeze()
 
     # Evaluate
     metrics = evaluate_forecast(y_test, y_pred)

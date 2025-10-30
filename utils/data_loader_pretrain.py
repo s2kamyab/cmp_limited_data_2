@@ -8,46 +8,6 @@ from scipy.fft import fft
 from tsaug import AddNoise, Crop, Drift, TimeWarp
 from scipy.interpolate import interp1d
 from tslearn.barycenters import dtw_barycenter_averaging
-# import sys
-# sys.path.append(r"paper_1_git_repo\\utils\\augmentation.py")
-# from paper_1_git_repo.utils.augmentation import *
-# from scipy.signal import cwt, ricker  # Ricker (Mexican hat) is a common wavelet
-
-
-# def random_permute_sequence(x, n_segments=4):
-#     T = x.shape[0]
-#     segment_len = T // n_segments
-#     segments = []
-
-#     for i in range(n_segments):
-#         start = i * segment_len
-#         end = (i + 1) * segment_len if i < n_segments - 1 else T
-#         segments.append(x[start:end])
-
-#     np.random.shuffle(segments)
-#     return np.concatenate(segments, axis=0)
-
-# def apply_random_permutation(X, p=0.5, n_segments=4, seed=None):
-#     if seed is not None:
-#         np.random.seed(seed)
-
-#     X = np.array(X)
-#     N = X.shape[0]
-#     is_multivariate = len(X.shape) == 3
-
-#     X_aug = []
-#     for i in range(N):
-#         if np.random.rand() < p:
-#             x_seq = X[i]
-#             if is_multivariate:
-#                 permuted = random_permute_sequence(x_seq)
-#             else:
-#                 permuted = random_permute_sequence(x_seq[:, np.newaxis]).squeeze()
-#             X_aug.append(permuted)
-#         else:
-#             X_aug.append(X[i])
-
-#     return np.stack(X_aug)
 
 def dba_augment_single(sequence, std, n_variants=5, seed=None):
     """
@@ -113,24 +73,7 @@ def magnitude_warp(x, std, knot=4):
     x_mg = np.exp(0.01*np.random.rand()) * x
     return x_mg
 
-# def time_warp(x):
 
-    # from scipy.interpolate import CubicSpline
-
-    # T = x.shape[0]
-    # sigma = 0.1*np.std(x)
-    # orig_steps = np.arange(T)
-    # warp_steps = np.linspace(0, T - 1, num=knot + 2)
-    # distort = np.random.normal(loc=0.0, scale=sigma, size=(knot + 2,))
-    # tt = CubicSpline(warp_steps, warp_steps + distort)(orig_steps)
-    # tt = np.clip(tt, 0, T - 1)
-
-    # if x.ndim == 1:
-    #     f = interp1d(orig_steps, x, kind='linear', fill_value='extrapolate')
-    #     return f(tt)
-    # else:
-    #     warped = [interp1d(orig_steps, x[:, i], kind='linear', fill_value='extrapolate')(tt) for i in range(x.shape[1])]
-    #     return np.stack(warped, axis=1)
 def rotation(x, k=None):
     T = x.shape[0]
     if k is None:
@@ -195,31 +138,7 @@ def augment_ts(X, Y, w_augment):#w_jittering=1.0, w_crop=1.0, w_mag_warp=1.0, w_
             augmented_X.append(x_rot)
             augmented_y.append(Y[i])
     return np.array(augmented_X), np.array(augmented_y)
-    #     augmented_X.append(x_i)
-    #     # Compose augmentations
-    #     aug = (
-    #         AddNoise(scale=0.1) @ w_jittering 
-    #         + Crop(size=x_i.shape[0]) @  w_crop  # use full length to avoid changing length
-    #         + Drift(max_drift=0.7, n_drift_points=5) @ w_mag_warp #(n_speed_change=3, magnitude=0.2) * 1
-    #         + TimeWarp(n_speed_change=3) @ w_time_warp 
-    #         # + w_rotation * Rotation(angle_range=(-20, 20)) * 1
-    #     )
-
-    #     # Apply tsaug augmentation
-    #     x_aug = aug.augment(x_i)
-    #     augmented_X.append(x_aug)
-
     
-    # # augmented_X = np.stack(augmented_X)
-    # # Apply random permutation
-    # if w_rand_perm > 0:
-    #     t = apply_random_permutation(augmented_X, p=w_rand_perm, n_segments=4)
-    # else:
-    #     t = []
-    #     # augmented_X.append(t)
-    
-    # tt = np.concatenate((np.array(augmented_X), np.array(t)), axis=0)
-    # return tt
 
 
 
@@ -264,28 +183,7 @@ def normalise_selected_columns(window_data,columns_to_normalise, single_window=T
             normalised_data.append(np.squeeze(np.array(normalised_window).T))
             # normalised_data.append(normalised_window)
         return np.squeeze(np.array(normalised_data))
-# def normalise_selected_columns(window_data, columns_to_normalise, single_window=False):
-#         # normalised_data = []
-#         # window_data = [window_data] if single_window else window_data
-#         # for window in window_data:
-#         # normalised_window = []
-#         # for ts_i in range(window_data.shape[0]):
-#             # if col_i in columns_to_normalise:
-#                 # Normalize only if the column index is in the list of columns to normalize
-#         w = window_data[-2]
-#         w[w==0] = 1
-#         normalised_window = window_data/w-1#[((p / w) - 1) for p in window_data]
-#             # else:
-#                 # Keep the original data for columns not in the list
-#                 # normalised_col = window[col_i].tolist()
-#         # normalised_window.append(normalised_col)
-#         # normalised_window = np.array(normalised_window).T
-#         # normalised_data.append(normalised_window)
-#         return np.array(normalised_window)
 
-# w_augment = {'w_jit': 0.1, 'w_crop':0.1, 
-#                  'w_mag_warp':0.1, 'w_time_warp':0.1, 
-#                  'w_rotation':0.1, 'w_rand_perm':0.1}
 def create_seqs_normalized(dfs, common_cols, 
                            seq_len, pred_len, normalization, columns_to_normalize, 
                            target_index, w_augment):
@@ -295,51 +193,15 @@ def create_seqs_normalized(dfs, common_cols,
 
     for df in dfs:
         values = df.values
-        # values = augment_ts(values, w_jittering = w_augment['w_jit'],
-        #                     w_crop = w_augment['w_crop'],
-        #                     w_mag_warp = w_augment['w_mag_warp'],
-        #                     w_time_warp = w_augment['w_time_warp'], 
-        #                     w_rand_perm=w_augment['w_rand_perm'],
-        #                     w_mbb = w_augment['w_mbb'])
-        
+                
         x_list, y_list = [], []
         x_list_actual, y_list_actual = [], []
         for i in range(len(values) - seq_len - pred_len):
-            x_seq = values[i:i+seq_len, :]
+            x_seq = values[i:i+seq_len, target_index]
             y_seq = values[i+seq_len: i+seq_len+pred_len, target_index]#values[i+1:i+seq_len+1, target_index]  # just target feature
-            # Calculate causal stats up to t (inclusive)
-            # if normalization == 'standard':
-            #     means = np.mean(x_seq[:, columns_to_normalize], axis=0)#.mean()
-            #     stds = np.std(x_seq[:, columns_to_normalize], axis=0)#.std().replace(0, 1e-8)
-            #     stds[stds == 0] = 1e-8  # avoid divide-by-zero
-            #     means = np.expand_dims(means, axis=0)
-            #     stds = np.expand_dims(stds, axis=0)
-            #     # Normalize past values (including target at time t)
-            #     x_seq_normalized = x_seq.copy()
-            #     x_seq_normalized[:, columns_to_normalize] = (x_seq[:, columns_to_normalize] - np.tile(means, [x_seq[:, columns_to_normalize].shape[0], 1])) / np.tile(stds, [x_seq[:, columns_to_normalize].shape[0], 1])
-            #     x_seq_normalized = np.nan_to_num(x_seq_normalized, nan=0)
-            #     y_seq_normalized = (y_seq - means[0, target_index]) / stds[0, target_index]
-            #     y_seq_normalized = np.nan_to_num(y_seq_normalized, nan=0)
-            # elif normalization == 'uniform':
-            #     x_seq_normalized = x_seq.copy()
-            #     maxs = np.max(x_seq[:, columns_to_normalize], axis =0)
-            #     maxs = np.expand_dims(maxs,axis = 0 )
-            #     mins = np.min(x_seq[:, columns_to_normalize], axis = 0)
-            #     mins = np.expand_dims(mins,axis = 0 )
-            #     x_seq_normalized[:, columns_to_normalize] = (x_seq[:, columns_to_normalize] - np.tile(mins, [x_seq.shape[0], 1])) / np.tile(maxs-mins, [x_seq.shape[0], 1])
-            #     x_seq_normalized = np.nan_to_num(x_seq_normalized, nan=0)
-            #     y_seq_normalized = (y_seq - np.tile(mins[0, target_index], [y_seq.shape[0], 1])) / np.tile(maxs[0, target_index]-mins[0, target_index], [y_seq.shape[0], 1]) #if (maxs[0, target_index]-mins[0, target_index]) != 0 else 1)
-            #     y_seq_normalized = np.nan_to_num(y_seq_normalized, nan=0)
-            # elif normalization == 'relative':
-            #     # x_seq_normalized = x_seq.copy()
-            #     t = normalise_selected_columns(values[i:i+seq_len+pred_len], columns_to_normalize, single_window=True)
-            #     x_seq_normalized = t[:seq_len, :]
-            #     y_seq_normalized = t[seq_len:, target_index]
-            # if normalization == 'None':
             x_seq_normalized = x_seq
             y_seq_normalized = y_seq
 
-                
             x_list.append(x_seq_normalized)
             y_list.append(y_seq_normalized)
             x_list_actual.append(x_seq)
@@ -459,7 +321,7 @@ def handle_outliers(df, target_col, method="zscore", threshold=3.0, replace_with
 ###########################################################################################
 # load data
 ###########################################################################################
-def load_data(dataset, 
+def load_data_pretrain(dataset, 
               preprocess_type,
                 seq_len, 
                 pred_len,
@@ -495,9 +357,8 @@ def load_data(dataset,
         residual1 = components['resid']
         df[target_name] = trend1 + seasonal1 # predict trend instead of the whole
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
-
-
-    elif dataset == 'soshianest_530486' or dataset == '530486_dataset.csv':
+        
+    elif dataset == 'soshianest_530486'or dataset == '530486_dataset.csv':
         df = pd.read_csv(r'paper_1_git_repo/data_soshianest/530486_dataset_with_sentiment.csv')
         df = df.drop('txtdate', axis=1)
         df = df.drop('14780', axis=1)
@@ -526,7 +387,7 @@ def load_data(dataset,
 
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
-    elif dataset == 'soshianest_530501'or dataset == '530501_dataset.csv':
+    elif dataset == 'soshianest_530501' or dataset == '530501_dataset.csv':
         df = pd.read_csv(r'paper_1_git_repo/data_soshianest/530501_dataset_with_sentiment.csv')
         # df = df[['OT', 'Sentiment_textblob']]
         df = df.drop('txtdate', axis=1)
@@ -557,7 +418,7 @@ def load_data(dataset,
 
         train1, test1 = train_test_split_time_series(df, test_size=0.3)
 
-    elif dataset == 'soshianest_549324'or dataset == '549324_dataset.csv':
+    elif dataset == 'soshianest_549324' or dataset == '549324_dataset.csv' :
         df = pd.read_csv(r'paper_1_git_repo/data_soshianest/549324_dataset_with_sentiment.csv')
         df = df.drop('txtdate', axis=1)
         # df = df.drop('14780', axis=1)
@@ -831,7 +692,6 @@ def load_data(dataset,
         output_dim = 2  # trend, seasonal, residual
     else:
         output_dim = 1
-    print(dataset)
     train1, test1, target_index = preprocess(preprocess_type, train1, test1, target_index)   
     if preprocess_type == 'decompose':
         columns_to_normalize = range(len(train1.columns))#[train1.columns.get_loc('trend'), train1.columns.get_loc('seasonal'), train1.columns.get_loc('residual')]

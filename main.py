@@ -17,7 +17,7 @@ import numpy as np
 
 def main():
     # Framework Settings
-    dataset_name = 'fin_aal'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
+    dataset_name = 'soshianest_5627'#'soshianest_5627','soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
 #  'fin_aal', 'fin_aapl', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt', 'fin_amzn', 'fin_baba',
 # 'fin_brkb', 'fin_cost', 'fin_ebay', 'clarckson_47353', 'clarckson_541976', 'clarckson_42930', 'clarckson_95900'
     # dataset_name = 'clarckson_pca_541976'
@@ -30,18 +30,29 @@ def main():
     batch_size = 12
     preprocess_type ='None'#'fft'#'decompose'#'None'
     eda = True
-    model_type = 'pretrained_gpt2'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 
+    model_type = 'ets'#'pretrained_informer'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 
     # 'finspd_transformer', 'lstm', 'times_net', 'pretrained_gpt2', 'pretrained_autoformer', 'pretrained_informer', 'var'
     # pcs = 1 # Number of principal components to use, 0 means no PCA
-    epoch = 100
+    epoch = 10
     lr = 0.00001
-    phase = 'train'  # 'train' or 'test
-    
-    use_sentiment = 0# 0 --> no sentiment, int --> lagged version of sentiment
+    phase = 'train'  # 'train' or 'test'
+    ####################################################################################
+    # Data augmentation weights
+    use_sentiment =2# 0 --> no sentiment, int --> lagged version of sentiment
     w_augment = {'w_jit': 0, 'w_crop':0, 
                  'w_mag_warp':0, 'w_time_warp':0, 
                  'w_rotation':0, 'w_rand_perm':0,
                  'w_mbb' : 0, 'w_dbn': 0}
+    
+    # w_augment = {'w_jit': 1, 'w_crop':1, 
+    #              'w_mag_warp':1, 'w_time_warp':1, 
+    #              'w_rotation':1, 'w_rand_perm':1,
+    #              'w_mbb' : 0, 'w_dbn': 0}
+    
+    # w_augment = {'w_jit': 0, 'w_crop':0, 
+    #              'w_mag_warp':0, 'w_time_warp':0, 
+    #              'w_rotation':0, 'w_rand_perm':0,
+    #              'w_mbb' : 1, 'w_dbn': 1}
     iter = 5
     plot_res = False# If True, plots the results of the evaluation
     criterion = 'mse' # 'smape', 'mse', 'mae', 'mape' # Loss function to use, can be 'mse', 'mae', 'smape', or 'mape'
@@ -63,7 +74,7 @@ def main():
     #####################################################################################
     # Load model
     model, optimizer = load_model(model_type, input_dim,output_dim, seq_len, pred_len, lr)
-    chkpnt_path = f'training_results/{dataset_name}_{model_type}_preprocess_{preprocess_type}_normalization_{normalization}_seq_len_{seq_len}_pred_len_{pred_len}_batch_size_{batch_size}_lr_{lr}.pth'  # Ensure the checkpoint path has the correct extension
+    chkpnt_path = f'training_results\\{dataset_name}_{model_type}_preprocess_{preprocess_type}_normalization_{normalization}_seq_len_{seq_len}_pred_len_{pred_len}_batch_size_{batch_size}_lr_{lr}.pth'  # Ensure the checkpoint path has the correct extension
     print(f"Model {model_type} loaded successfully with input dimension {input_dim}.")
     ##########################################################################################
     if model_type not in {'var', 'ets'} :
@@ -74,6 +85,10 @@ def main():
             for i in range(iter):
                 # Train the model
                 train_losses, val_losses, model = train_model(model, 
+                                                            dataset_name,
+                                                            seq_len,
+                                                            batch_size,
+                                                            model_type,
                                                             train_loader_actual, 
                                                             test_loader_actual, 
                                                             criterion, 

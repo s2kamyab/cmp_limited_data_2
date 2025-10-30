@@ -9,75 +9,46 @@ from statsmodels.tsa.holtwinters import SimpleExpSmoothing, Holt
 from transformers import GPT2Model, GPT2Config
 from transformers import InformerForPrediction, InformerConfig
 from transformers import AutoformerForPrediction, AutoformerConfig
-def autocorrelation(query_states, key_states):
-    """
-    Computes autocorrelation(Q,K) using `torch.fft`. 
-    Think about it as a replacement for the QK^T in the self-attention.
-    
-    Assumption: states are resized to same shape of [batch_size, time_length, embedding_dim].
-    """
-    query_states_fft = torch.fft.rfft(query_states, dim=1)
-    key_states_fft = torch.fft.rfft(key_states, dim=1)
-    attn_weights = query_states_fft * torch.conj(key_states_fft)
-    attn_weights = torch.fft.irfft(attn_weights, dim=1)  
-    
-    return attn_weights
-class DecompositionLayer(nn.Module):
-    """
-    Returns the trend and the seasonal parts of the time series.
-    """
+import torch.nn as nn
+from transformers import InformerForPrediction, InformerConfig, InformerModel
 
-    def __init__(self, kernel_size):
+class HuggingFaceInformerWrapper(nn.Module):
+    def __init__(self, input_dim, pred_len, output_dim, seq_len):
         super().__init__()
-        self.kernel_size = kernel_size
-        self.avg = nn.AvgPool1d(kernel_size=kernel_size, stride=1, padding=0) # moving average 
+        # Pretrained model expects input_size=7 (change if needed)
+        self.model_input_size = seq_len
+        # Linear layer to map your input_dim to model_input_size
+        self.input_projection = nn.Linear(input_dim, seq_len)
 
-    def forward(self, x):
-        """Input shape: Batch x Time x EMBED_DIM"""
-        # padding on the both ends of time series
-        num_of_pads = (self.kernel_size - 1) // 2
-        front = x[:, 0:1, :].repeat(1, num_of_pads, 1)
-        end = x[:, -1:, :].repeat(1, num_of_pads, 1)
-        x_padded = torch.cat([front, x, end], dim=1)
-
-        # calculate the trend and seasonal part of the series
-        x_trend = self.avg(x_padded.permute(0, 2, 1)).permute(0, 2, 1)
-        x_seasonal = x - x_trend
-        return x_seasonal, x_trend
-class InformerTimeSeriesModel(nn.Module):
-    def __init__(self, input_dim, pred_len, output_dim, seq_len=96, label_len=48, d_model=512):
-        super(InformerTimeSeriesModel, self).__init__()
-        self.pred_len = pred_len
-        self.seq_len = seq_len
-        self.label_len = label_len
-
-        config = InformerConfig(
+        self.config = InformerConfig.from_pretrained(
+            "huggingface/informer-tourism-monthly",
             prediction_length=pred_len,
-            context_length=seq_len,
-            label_length=label_len,
+            context_length=47,
             input_size=input_dim,
-            d_model=d_model,
-            target_size=output_dim
+            output_size=output_dim,
+            freq="W",
         )
-        self.model = InformerForPrediction(config)
+        self.model = InformerModel.from_pretrained("huggingface/informer-tourism-monthly", config=self.config)
+        # Optional: a dense layer after Informer for post-processing
+        self.output_projection = nn.Linear(self.config.d_model, output_dim)
 
-    def forward(self, x):
-        """
-        x: (batch_size, seq_len, input_dim)
-        Returns:
-            (batch_size, pred_len, output_dim)
-        """
-        inputs = {
-            "past_values": x,
-            'past_observed_mask': torch.ones(x.size(0), self.seq_len, dtype=torch.bool).to(x.device),
-            "past_time_features": torch.zeros_like(x),
-            "future_time_features": torch.zeros(x.size(0), self.pred_len, x.size(2)).to(x.device),
-        }
-        out = self.model(**inputs)
-        return out.predictions  # (batch, pred_len, output_dim)
+    def forward(self, x, past_observed_mask, past_time_features):
+        # x shape: (batch, seq_len, input_dim)
+        x_proj = self.input_projection(x)  # (batch, seq_len, model_input_size)
+
+        model_inputs = {"past_values": x_proj, "past_observed_mask": past_observed_mask, "past_time_features": past_time_features}
+        outputs = self.model(**model_inputs)
+
+        # If you want just the predictions: apply output_projection
+        return self.output_projection(outputs.last_hidden_state[:, -self.config.prediction_length:, :])
+        # # x shape: (batch, seq_len, input_dim)
+        # model_inputs = {"past_values": x}
+        # outputs = self.model(**model_inputs)
+        # return outputs.predictions  # shape: (batch, pred_len, output_dim)
+
     
 class AutoformerTimeSeriesModel(nn.Module):
-    def __init__(self, input_dim, pred_len, output_dim, seq_len,  d_model=512):
+    def __init__(self, input_dim, pred_len, output_dim, seq_len,  d_model=16):
         super(AutoformerTimeSeriesModel, self).__init__()
         self.pred_len = pred_len
         self.seq_len = seq_len
@@ -185,7 +156,7 @@ class GPT2TimeSeriesModel(nn.Module):
             attn_pdrop=0.1
         )
         self.transformer = GPT2Model(config)
-        # Freeze the first 4 layers of GPT-2
+        # Freeze the first 5 layers of GPT-2
         for i in range(5):
             for param in self.transformer.h[i].parameters():
                 param.requires_grad = False
@@ -238,11 +209,17 @@ class ETSTimeSeries:
                 y_norm = (test1 - np.tile(np.expand_dims(x_mean, axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std, axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
             elif normalization == 'minmax':
                 x_min = history.min(axis=0)#dim=1, keepdim=True)[0]
-                x_min = np.tile(np.expand_dims(x_min[:,  target_index], axis=1), [1,history.shape[1],1] )
+                x_min = np.tile(np.expand_dims(x_min, axis=0), [history.shape[0], 1])
+                # x_min = np.tile(np.expand_dims(x_min[:,  target_index], axis=1), [1,history.shape[1],1] )
                 x_max = history.max(axis=0)#(dim=1, keepdim=True)[0]
-                x_max = np.tile(np.expand_dims(x_max[:,  target_index], axis=1), [1,history.shape[1],1] )
+                x_max= np.tile(np.expand_dims(x_max, axis=0), [history.shape[0], 1])
+                # x_max = np.tile(np.expand_dims(x_max[:,  target_index], axis=1), [1,history.shape[1],1] )
                 x_norm = (history - x_min) / (x_max - x_min + 1e-8)
                 # y_norm = (test1.iloc[:, target_index]  - x_min.iloc[:, target_index] ) / (x_max - x_min + 1e-8)
+                x_min = history.min(axis=0)
+                x_min = np.tile(np.expand_dims(x_min, axis=0), [test1.shape[0], 1])
+                x_max = history.max(axis=0)#(dim=1, keepdim=True)[0]
+                x_max = np.tile(np.expand_dims(x_max, axis=0), [test1.shape[0], 1])
                 y_norm = (test1 - x_min ) / (x_max - x_min + 1e-8)
             elif normalization == 'relative':
                 ref = history.iloc[-1, :]  # last time step
@@ -314,11 +291,17 @@ class VARTimeSeries:
                 y_norm = (test1 - np.tile(np.expand_dims(x_mean, axis=0), [test1.shape[0], 1])) / np.tile(np.expand_dims(x_std, axis=0), [test1.shape[0], 1])  # Assuming y relates to 1st feature
             elif normalization == 'minmax':
                 x_min = history.min(axis=0)#dim=1, keepdim=True)[0]
-                x_min = np.tile(np.expand_dims(x_min[:,  target_index], axis=1), [1,history.shape[1],1] )
+                x_min = np.tile(np.expand_dims(x_min, axis=0), [history.shape[0], 1])
+                # x_min = np.tile(np.expand_dims(x_min[:,  target_index], axis=1), [1,history.shape[1],1] )
                 x_max = history.max(axis=0)#(dim=1, keepdim=True)[0]
-                x_max = np.tile(np.expand_dims(x_max[:,  target_index], axis=1), [1,history.shape[1],1] )
+                x_max= np.tile(np.expand_dims(x_max, axis=0), [history.shape[0], 1])
+                # x_max = np.tile(np.expand_dims(x_max[:,  target_index], axis=1), [1,history.shape[1],1] )
                 x_norm = (history - x_min) / (x_max - x_min + 1e-8)
                 # y_norm = (test1.iloc[:, target_index]  - x_min.iloc[:, target_index] ) / (x_max - x_min + 1e-8)
+                x_min = history.min(axis=0)
+                x_min = np.tile(np.expand_dims(x_min, axis=0), [test1.shape[0], 1])
+                x_max = history.max(axis=0)#(dim=1, keepdim=True)[0]
+                x_max = np.tile(np.expand_dims(x_max, axis=0), [test1.shape[0], 1])
                 y_norm = (test1 - x_min ) / (x_max - x_min + 1e-8)
             elif normalization == 'relative':
                 ref = history.iloc[-1, :]  # last time step
@@ -327,6 +310,7 @@ class VARTimeSeries:
                 # y_norm = test1.iloc[:,target_index] / np.tile(np.expand_dims(ref.iloc[target_index], axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
                 y_norm = test1 / np.tile(np.expand_dims(ref, axis=0), [test1.shape[0],1] ) # assuming y relates to 1st feature
             history = x_norm
+            
             model = VAR(endog=history)#).iloc[:, target_index])#, freq='d')
             model_fit = model.fit()
             # make prediction on validation
@@ -334,8 +318,8 @@ class VARTimeSeries:
             # tt[abs(tt)>4]=0
             prediction.append(tt[:, target_index])
             gt.append(y_norm.iloc[step:step+self.pred_len,target_index].values)
-            print(tt[:, target_index])
-            print(y_norm.iloc[step:step+self.pred_len,target_index].values)
+            # print(tt[:, target_index])
+            # print(y_norm.iloc[step:step+self.pred_len,target_index].values)
             ########################### Update train  history#################################
             # move the training window
             # print(train.values.shape, train.index.shape)
@@ -559,7 +543,7 @@ def load_model(model_type, input_dim, output_dim, seq_len, pred_len, lr=0.0001):
         # Initialize VAR model
         model = VARTimeSeries(seq_len=seq_len, pred_len=pred_len)
     elif model_type == 'ets':
-        # Initialize VAR model
+        # Initialize ETS model
         model = ETSTimeSeries(seq_len=seq_len, pred_len=pred_len)
     elif model_type == 'pretrained_gpt2':
         model = GPT2TimeSeriesModel(input_dim, pred_len, output_dim)
@@ -567,7 +551,7 @@ def load_model(model_type, input_dim, output_dim, seq_len, pred_len, lr=0.0001):
         input_dim, pred_len, output_dim, seq_len
         model = AutoformerTimeSeriesModel(input_dim, pred_len, output_dim, seq_len)
     elif model_type == 'pretrained_informer':
-        model = InformerTimeSeriesModel(input_dim=input_dim, pred_len=pred_len, output_dim=output_dim)
+        model = HuggingFaceInformerWrapper(input_dim=input_dim, pred_len=pred_len, output_dim=output_dim, seq_len=seq_len)
     else:
         raise ValueError(f"Model type '{model_type}' is not recognized.")
     # Define loss function and optimizer

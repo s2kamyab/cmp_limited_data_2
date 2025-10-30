@@ -1,8 +1,8 @@
 #! C:\Users\shima\Documents\Postdoc_Uvic\Paper1\Code\Github\uvic_paper\Scripts\python.exe
 import torch
-from utils.data_loader import load_data
+from utils.data_loader_pretrain import load_data_pretrain as load_data
 from utils.model_loader import load_model
-from utils.training import train_model, load_checkpoint_me
+from utils.training import train_model_only_target
 from utils.evaluation import evaluate_model
 from utils.EDA import Explore_data
 from utils.evaluation import evaluate_forecast
@@ -32,12 +32,9 @@ def load_all_except_one(folder_path, exclude_file, preprocess_type,
     all_test_sets = []
     all_train_sets_actual = []
     all_test_sets_actual = []
-    if folder_path.startswith('./data_clarckson'):
-        file_list = ['clarckson_47353', 'clarckson_541976', 'clarckson_42930', 'clarckson_95900']
-    else:
-        file_list = os.listdir(folder_path)
+    file_list = os.listdir(folder_path)
     # Step 3: Loop through all other files
-    for file in file_list[:4]:  # Limit to first 3 files for testing
+    for file in file_list:#[:4]:  # Limit to first 3 files for testing
         if file != exclude_file:
             full_path = file#os.path.join(folder_path, file)
             train1, test1, train_loader, test_loader, train_loader_actual, \
@@ -50,19 +47,7 @@ def load_all_except_one(folder_path, exclude_file, preprocess_type,
             all_test_sets_actual.append(test_loader_actual.dataset)
             all_train_sets.append(train_loader.dataset)
             all_test_sets.append(test_loader.dataset)
-        # elif file.startswith('./data/clarckson') and file != exclude_file:
-        #     full_path = file#os.path.join(folder_path, file)
-        #     train1, test1, train_loader, test_loader, train_loader_actual, \
-        #         test_loader_actual, input_dim, output_dim, cols, target_index,\
-        #               columns_to_normalize = load_data(full_path, preprocess_type, 
-        #                                      seq_len, pred_len, 
-        #                                      batch_size, normalization, 
-        #                                      use_sentiment, w_augment)
-        #     all_train_sets_actual.append(train_loader_actual.dataset)
-        #     all_test_sets_actual.append(test_loader_actual.dataset)
-        #     all_train_sets.append(train_loader.dataset)
-        #     all_test_sets.append(test_loader.dataset)
-
+        
     # Step 4: Concatenate all datasets and recreate DataLoaders
     combined_train_loader_actual = DataLoader(ConcatDataset(all_train_sets_actual), batch_size=64, shuffle=True)
     combined_test_loader_actual = DataLoader(ConcatDataset(all_test_sets_actual), batch_size=64, shuffle=False)
@@ -102,7 +87,7 @@ def load_all_except_one(folder_path, exclude_file, preprocess_type,
 
 def main():
     # Framework Settings
-    finetune_dataset_name = 'clarckson_5627'#'soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
+    finetune_dataset_name = 'soshianest_530501'#soshianest_5627','soshianest_530486', 'soshianest_530501', 'soshianest_549324', 
 #  'fin_aal', 'fin_aapl', 'fin_amd', 'fin_ko', 'fin_TSM', 'goog', 'fin_wmt', 'fin_amzn', 'fin_baba',
 # 'fin_brkb', 'fin_cost', 'fin_ebay', 'clarckson_47353'
     
@@ -112,8 +97,8 @@ def main():
     batch_size = 12
     preprocess_type ='None'#'fft'#'decompose'#'None'
     eda = True
-    model_type = 'Grnn'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
-    epoch = 100
+    model_type = 'GPT2like_transformer'#'ets'#'GPT2like_transformer'# 'rnn', 'cnn', 'gru', 'finspd_transformer', 'lstm', 'times_net'
+    epoch = 10
     lr = 0.00001
     phase = 'train'  # 'train' or 'test
     use_sentiment = 0# 0 --> no sentiment, int --> lagged version of sentiment
@@ -121,18 +106,13 @@ def main():
                  'w_mag_warp':0, 'w_time_warp':0, 
                  'w_rotation':0, 'w_rand_perm':0,
                  'w_mbb' : 0, 'w_dbn': 0}
-    iter = 5
+    iter = 1
     plot_res = False # If True, plots the results of the evaluation
     criterion = 'mse' # 'smape', 'mse', 'mae', 'mape' # Loss function to use, can be 'mse', 'mae', 'smape', or 'mape'
     # print(f"Running with dataset: {dataset_name},\n model: {model_type},\n preprocess: {preprocess_type}, \n normalization: {normalization},\n sequence length: {seq_len}, \n prediction length: {pred_len},\n batch size: {batch_size}, \n learning rate: {lr},\n phase: {phase}")
     ####################################################################################
     # Load dataset
-    if finetune_dataset_name.startswith('clarckson'):
-        result = load_all_except_one('./data_clarckson', finetune_dataset_name ,  preprocess_type, 
-                                                        seq_len, pred_len,batch_size,
-                                                        normalization, use_sentiment, w_augment)
-    else:
-        result = load_all_except_one('./data', finetune_dataset_name ,  preprocess_type, 
+    result = load_all_except_one('data_pretr_finetune/', finetune_dataset_name , preprocess_type, 
                                                         seq_len, pred_len,batch_size,
                                                         normalization, use_sentiment, w_augment)
         # Access:
@@ -152,22 +132,12 @@ def main():
     target_index = result["combined_others"]["target_index"]
     columns_to_normalize = result["excluded"]["columns_to_normalize"]
     
-    # train1, test1,\
-    # train_loader, test_loader, \
-    #     train_loader_actual, test_loader_actual,\
-    #           input_dim,output_dim, cols, target_index,\
-    #               columns_to_normalize = load_data(dataset_name, 
-    #                                                preprocess_type, 
-    #                                                seq_len, pred_len,batch_size,
-    #                                                  normalization, use_sentiment, w_augment)
-    #####################################################################################
-    # Explore data
-    # Explore_data(eda, train_loader, test_loader, preprocess_type, cols, dataset_name, use_sentiment)
     #####################################################################################
     # Load model to pre train
-    model, optimizer = load_model(model_type, input_dim,output_dim, seq_len, pred_len, lr)
+    model, optimizer = load_model(model_type, 1, output_dim, seq_len, pred_len, lr)# input dim is 1 for single variable fine tuning
+    ##########################################################################################
     chkpnt_path = f'{finetune_dataset_name}_{model_type}_preprocess_{preprocess_type}_normalization_{normalization}_seq_len_{seq_len}_pred_len_{pred_len}_batch_size_{batch_size}_lr_{lr}.pth'  # Ensure the checkpoint path has the correct extension
-    print(f"Model {model_type} loaded successfully with input dimension {input_dim}.")
+    print(f"Model {model_type} loaded successfully with input dimension 1 .")
     # chkpnt_path = f'training_results/{dataset_name}_{model_type}_preprocess_{preprocess_type}_normalization_{normalization}_seq_len_{seq_len}_pred_len_{pred_len}_batch_size_{batch_size}_lr_{lr}.pth'  # Ensure the checkpoint path has the correct extension
     # print(f"Model {model_type} loaded successfully with input dimension {input_dim}.")
     ##########################################################################################
@@ -176,7 +146,7 @@ def main():
     mets =[]
     for i in range(iter):
         # Train the model
-        train_losses, val_losses, model = train_model(model, 
+        train_losses, val_losses, model = train_model_only_target(model, 
                                                             finetune_dataset_name,
                                                             seq_len,
                                                             batch_size,
@@ -202,7 +172,7 @@ def main():
             layer_count += 1
 
 
-        train_losses, val_losses, model = train_model(model, 
+        train_losses, val_losses, model = train_model_only_target(model, 
                                                             finetune_dataset_name,
                                                             seq_len,
                                                             batch_size,
@@ -224,7 +194,7 @@ def main():
         # Evaluate model on test data
         mets.append(evaluate_model(model, excluded_test_loader, excluded_test_loader_actual, cols, 
                     train_losses, val_losses, pred_len, normalization, columns_to_normalize,
-                    target_index, preprocess_type, plot_res, num_samples=3, device='cpu'))
+                    0, preprocess_type, plot_res, num_samples=3, device='cpu'))
     # Initialize sum dictionary
     sum_metrics = defaultdict(float)
     for m in mets:
